@@ -10,7 +10,7 @@ from datetime import datetime
 
 log = logging.getLogger("safe_return.notifications")
 
-NOTIFICATION_SERVICE_URL = "http://localhost:8080/api/notify"
+NOTIFICATION_SERVICE_URL = "https://safe-return-notifications.onrender.com/api/notify"
 CONFIDENCE_THRESHOLD     = 70.0
 
 
