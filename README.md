@@ -2,7 +2,7 @@
 
 # Intelligent System for Finding Missing People using Face
 
-This project is an AI-powered system designed to help identify and locate missing individuals using facial recognition and eye-state detection from images, CCTV footage, or real-time camera inputs.
+This project is an AI-powered system designed to help identify and locate missing individuals using facial recognition.
 
 An AI-based system that helps identify missing people using **face detection**.
 
