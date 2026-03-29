@@ -1,0 +1,67 @@
+server:
+  port: 8080
+
+# ─────────────────────────────────────────────────────────────
+#  Gmail SMTP Configuration  (100% FREE)
+#  1. Go to Google Account → Security → 2-Step Verification ON
+#  2. Go to App Passwords → Generate a 16-char App Password
+#  3. Use that App Password below (NOT your real Gmail password)
+# ─────────────────────────────────────────────────────────────
+spring:
+  mail:
+    host: smtp.gmail.com
+    port: 587
+    username: ${GMAIL_USER:bhagyashrinigdikar68@gmail.com}
+    password: ${GMAIL_APP_PASSWORD:uqbw octn tych esfz}
+    properties:
+      mail:
+        smtp:
+          auth: true
+          starttls:
+            enable: true
+          connectiontimeout: 5000
+          timeout: 5000
+          writetimeout: 5000
+
+# ─────────────────────────────────────────────────────────────
+#  Safe Return Notification Config
+# ─────────────────────────────────────────────────────────────
+notification:
+  # Minimum confidence % to trigger notification (70 = 70%)
+  confidence-threshold: 70.0
+
+  email:
+    enabled: true
+    from: ${GMAIL_USER:bhagyashrinigdikar68@gmail.com}
+    from-name: "Safe Return System"
+    # Comma-separated list of family email addresses
+    # Override via env var: FAMILY_EMAILS=mom@gmail.com,dad@gmail.com
+    family-emails: ${FAMILY_EMAILS:bnigdikar@gmail.com}
+
+  # ─────────────────────────────────────────────────────────
+  #  ntfy.sh – 100% FREE push notifications to phone
+  #  Install the "ntfy" app on Android/iOS (free, open-source)
+  #  Then subscribe to your unique topic name below
+  #  No account required! Just pick a unique topic name.
+  # ─────────────────────────────────────────────────────────
+  ntfy:
+    enabled: true
+    server: https://ntfy.sh
+    # Make this a hard-to-guess unique name, e.g. safe-return-jones-family-2024
+    topic: ${NTFY_TOPIC:safe-return-2026}
+
+  # ─────────────────────────────────────────────────────────
+  #  CallMeBot WhatsApp – FREE (needs one-time activation)
+  #  Steps:
+  #  1. Save +34 644 52 74 97 in your contacts as "CallMeBot"
+  #  2. Send "I allow callmebot to send me messages" to that number on WhatsApp
+  #  3. You'll receive your API key via WhatsApp
+  #  4. Fill in phone (international format) and apiKey below
+  # ─────────────────────────────────────────────────────────
+  whatsapp:
+    enabled: false  # set to true after completing activation steps
+    phone: ${WHATSAPP_PHONE:+919876543210}   # family member's phone with country code
+    api-key: ${WHATSAPP_API_KEY:your-callmebot-api-key}
+
+  # Flask API base URL (your existing Python backend)
+  flask-api-url: ${FLASK_API_URL:http://localhost:5000}
