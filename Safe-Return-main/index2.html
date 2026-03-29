@@ -1,0 +1,1041 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>Auth · Portal</title>
+  <link href="https://fonts.googleapis.com/css2?family=Bebas+Neue&family=DM+Sans:ital,wght@0,300;0,400;0,500;0,600;1,300&display=swap" rel="stylesheet"/>
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+    html {
+      overflow-y: auto;
+      overflow-x: hidden;
+      scroll-behavior: smooth;
+    }
+
+    :root {
+      --bg: #0a0a0f;
+      --card: #12121a;
+      --border: #2a2a3a;
+      --accent: #e8ff47;
+      --accent-dim: rgba(232,255,71,0.10);
+      --accent2: #5c47ff;
+      --accent2-dim: rgba(92,71,255,0.10);
+      --accent3: #ff6b47;
+      --text: #f0f0f0;
+      --muted: #6b6b80;
+      --error: #ff4d6d;
+      --success: #4dffb4;
+    }
+
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+    body {
+      font-family: 'DM Sans', sans-serif;
+      background: var(--bg);
+      color: var(--text);
+      min-height: 100vh;
+      display: flex;
+      align-items: flex-start;
+      justify-content: center;
+      overflow-y: auto;
+      overflow-x: hidden;
+      padding: 40px 16px;
+    }
+
+    body::before, body::after {
+      content: '';
+      position: fixed;
+      border-radius: 50%;
+      filter: blur(120px);
+      opacity: 0.15;
+      pointer-events: none;
+      animation: drift 12s ease-in-out infinite alternate;
+    }
+    body::before {
+      width: 600px; height: 600px;
+      background: radial-gradient(circle, #e8ff47, transparent);
+      top: -200px; left: -150px;
+    }
+    body::after {
+      width: 500px; height: 500px;
+      background: radial-gradient(circle, #5c47ff, transparent);
+      bottom: -150px; right: -100px;
+      animation-delay: -5s;
+    }
+    @keyframes drift {
+      from { transform: translate(0,0) scale(1); }
+      to   { transform: translate(50px,40px) scale(1.12); }
+    }
+
+    .card {
+      background: var(--card);
+      border: 1px solid var(--border);
+      border-radius: 24px;
+      padding: 48px 44px;
+      width: 100%;
+      max-width: 440px;
+      position: relative;
+      box-shadow: 0 0 0 1px rgba(255,255,255,0.03), 0 40px 100px rgba(0,0,0,0.7);
+      animation: slideUp 0.5s cubic-bezier(.22,.68,0,1.2) both;
+      height: auto;
+      overflow: visible;
+    }
+    @keyframes slideUp {
+      from { opacity: 0; transform: translateY(24px) scale(0.97); }
+      to   { opacity: 1; transform: translateY(0) scale(1); }
+    }
+
+    .breadcrumb {
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      margin-bottom: 24px;
+      flex-wrap: wrap;
+    }
+    .crumb { font-size: 11px; font-weight: 500; letter-spacing: 0.08em; text-transform: uppercase; color: var(--muted); }
+    .crumb.active { color: var(--accent); }
+    .crumb-sep { color: var(--border); font-size: 11px; }
+
+    .badge {
+      display: inline-block;
+      font-size: 11px; font-weight: 500;
+      letter-spacing: 0.12em; text-transform: uppercase;
+      padding: 5px 12px; border-radius: 100px;
+      margin-bottom: 16px;
+    }
+    .badge-y { background: var(--accent-dim); color: var(--accent); border: 1px solid rgba(232,255,71,0.25); }
+    .badge-p { background: var(--accent2-dim); color: #a090ff; border: 1px solid rgba(92,71,255,0.3); }
+    .badge-o { background: rgba(255,107,71,0.1); color: #ff9070; border: 1px solid rgba(255,107,71,0.25); }
+
+    h1 {
+      font-family: 'Bebas Neue', sans-serif;
+      font-size: 48px; line-height: 1; letter-spacing: 0.02em;
+      margin-bottom: 6px;
+    }
+    .hy { color: var(--accent); }
+    .hp { color: #a090ff; }
+    .ho { color: #ff9070; }
+
+    .subtitle { color: var(--muted); font-size: 13.5px; font-weight: 300; margin-bottom: 28px; }
+
+    /* Tab toggle */
+    .tab-group {
+      display: flex;
+      background: rgba(255,255,255,0.04);
+      border: 1px solid var(--border);
+      border-radius: 12px;
+      padding: 4px;
+      margin-bottom: 24px;
+    }
+    .tab-btn {
+      flex: 1; background: none; border: none;
+      border-radius: 9px; padding: 10px;
+      font-family: 'DM Sans', sans-serif;
+      font-size: 13.5px; font-weight: 500;
+      color: var(--muted); cursor: pointer;
+      transition: all 0.2s;
+    }
+    .tab-btn.active { background: var(--accent); color: #0a0a0f; }
+
+    /* Role cards */
+    .role-grid { display: grid; gap: 10px; margin-bottom: 4px; }
+    .role-grid.cols2 { grid-template-columns: 1fr 1fr; }
+    .role-grid.cols3 { grid-template-columns: 1fr 1fr 1fr; }
+
+    .role-card {
+      background: rgba(255,255,255,0.03);
+      border: 1px solid var(--border);
+      border-radius: 14px; padding: 20px 14px;
+      text-align: center; cursor: pointer;
+      transition: all 0.2s;
+      display: flex; flex-direction: column;
+      align-items: center; gap: 8px;
+    }
+    .role-card:hover { border-color: var(--accent); background: var(--accent-dim); }
+    .role-card .icon { font-size: 28px; }
+    .role-card .name { font-size: 13px; font-weight: 500; }
+    .role-card .desc { font-size: 11px; color: var(--muted); }
+
+    /* Form elements */
+    label {
+      display: block; font-size: 11.5px; font-weight: 500;
+      letter-spacing: 0.08em; text-transform: uppercase;
+      color: var(--muted); margin-bottom: 7px;
+    }
+
+    .input-wrap { position: relative; margin-bottom: 14px; }
+    .input-wrap .pfx {
+      position: absolute; left: 13px; top: 50%;
+      transform: translateY(-50%);
+      color: var(--muted); font-size: 15px; pointer-events: none;
+    }
+
+    input[type="text"],
+    input[type="email"],
+    input[type="tel"],
+    input[type="password"] {
+      width: 100%;
+      background: rgba(255,255,255,0.04);
+      border: 1px solid var(--border);
+      border-radius: 10px;
+      padding: 13px 16px 13px 40px;
+      color: var(--text);
+      font-family: 'DM Sans', sans-serif;
+      font-size: 15px; outline: none;
+      transition: border-color 0.2s, box-shadow 0.2s;
+    }
+    input.np { padding-left: 16px !important; }
+    input::placeholder { color: var(--muted); }
+    input:focus {
+      border-color: var(--accent);
+      box-shadow: 0 0 0 3px rgba(232,255,71,0.08);
+    }
+
+    .pw-wrap { position: relative; margin-bottom: 14px; }
+    .pw-wrap .pfx {
+      position: absolute; left: 13px; top: 50%;
+      transform: translateY(-50%);
+      color: var(--muted); font-size: 15px; pointer-events: none;
+    }
+    .pw-wrap input { padding-left: 40px; padding-right: 42px; width: 100%;
+      background: rgba(255,255,255,0.04);
+      border: 1px solid var(--border);
+      border-radius: 10px; padding-top: 13px; padding-bottom: 13px;
+      color: var(--text); font-family: 'DM Sans', sans-serif;
+      font-size: 15px; outline: none;
+      transition: border-color 0.2s, box-shadow 0.2s;
+    }
+    .pw-wrap input:focus { border-color: var(--accent); box-shadow: 0 0 0 3px rgba(232,255,71,0.08); }
+    .pw-toggle {
+      position: absolute; right: 13px; top: 50%;
+      transform: translateY(-50%);
+      background: none; border: none;
+      color: var(--muted); cursor: pointer;
+      font-size: 16px; padding: 0; line-height: 1;
+    }
+    .pw-toggle:hover { color: var(--text); }
+
+    /* Contact choice */
+    .contact-choice { display: flex; gap: 8px; margin-bottom: 10px; }
+    .choice-pill {
+      flex: 1;
+      background: rgba(255,255,255,0.03);
+      border: 1px solid var(--border);
+      border-radius: 8px; padding: 8px;
+      font-family: 'DM Sans', sans-serif;
+      font-size: 12.5px; font-weight: 500;
+      color: var(--muted); cursor: pointer;
+      transition: all 0.2s; text-align: center;
+    }
+    .choice-pill.active {
+      border-color: var(--accent);
+      background: var(--accent-dim);
+      color: var(--accent);
+    }
+
+    /* OTP boxes */
+    .otp-group { display: flex; gap: 8px; margin-bottom: 14px; }
+    .otp-group input {
+      flex: 1; text-align: center;
+      padding: 14px 0 !important;
+      font-size: 20px !important; font-weight: 500;
+    }
+
+    /* Buttons */
+    button.primary {
+      width: 100%;
+      background: var(--accent);
+      color: #0a0a0f; border: none;
+      border-radius: 10px; padding: 14px;
+      font-family: 'DM Sans', sans-serif;
+      font-size: 15px; font-weight: 600;
+      cursor: pointer;
+      transition: transform 0.15s, opacity 0.15s, box-shadow 0.2s;
+      margin-top: 2px;
+      display: flex; align-items: center; justify-content: center; gap: 8px;
+    }
+    button.primary:hover { opacity: 0.92; box-shadow: 0 8px 30px rgba(232,255,71,0.22); transform: translateY(-1px); }
+    button.primary:active { transform: translateY(0); }
+    button.primary:disabled { opacity: 0.4; cursor: not-allowed; transform: none; }
+    button.primary.pur { background: #a090ff; }
+    button.primary.pur:hover { box-shadow: 0 8px 30px rgba(160,144,255,0.22); }
+    button.primary.ora { background: #ff9070; }
+    button.primary.ora:hover { box-shadow: 0 8px 30px rgba(255,144,112,0.22); }
+
+    .btn-loader {
+      display: none; width: 17px; height: 17px;
+      border: 2px solid rgba(0,0,0,0.25);
+      border-top-color: #0a0a0f;
+      border-radius: 50%;
+      animation: spin 0.7s linear infinite;
+    }
+    @keyframes spin { to { transform: rotate(360deg); } }
+
+    .msg { margin-top: 11px; font-size: 12.5px; text-align: center; min-height: 16px; }
+    .msg.ok  { color: var(--success); }
+    .msg.err { color: var(--error); }
+
+    .back-link {
+      display: block; text-align: center;
+      margin-top: 13px; font-size: 12.5px;
+      color: var(--muted); cursor: pointer;
+      transition: color 0.2s;
+      background: none; border: none;
+      font-family: 'DM Sans', sans-serif; width: 100%;
+    }
+    .back-link:hover { color: var(--accent); }
+
+    .timer { font-size: 12px; color: var(--muted); text-align: center; margin-top: 10px; }
+    .timer span { color: var(--accent); font-weight: 500; }
+    .resend-btn {
+      background: none; border: none; color: var(--accent);
+      font-family: 'DM Sans', sans-serif; font-size: 12px;
+      cursor: pointer; padding: 0; display: none;
+      width: 100%; text-align: center; margin-top: 8px;
+    }
+    .resend-btn:hover { opacity: 0.75; }
+
+    /* Screens */
+    .screen { display: none; animation: fadeIn 0.28s ease both; }
+    .screen.active { display: block; }
+    @keyframes fadeIn {
+      from { opacity: 0; transform: translateY(8px); }
+      to   { opacity: 1; transform: translateY(0); }
+    }
+  </style>
+</head>
+<body>
+<div class="card">
+
+  <!-- ══════════════════════════════════
+       S0 · Home — Login / Sign Up
+  ══════════════════════════════════ -->
+  <div class="screen active" id="s-home">
+    <div class="badge badge-y">✦ Secure Access</div>
+    <h1>Welcome <span class="hy">Back.</span></h1>
+    <p class="subtitle">Sign in or create a new account to continue.</p>
+
+    <div class="tab-group">
+      <button class="tab-btn active" id="tab-login"  onclick="switchTab('login')">Log In</button>
+      <button class="tab-btn"        id="tab-signup" onclick="switchTab('signup')">Sign Up</button>
+    </div>
+
+    <!-- Login roles -->
+    <div id="login-roles">
+      <p style="color:var(--muted);font-size:13px;margin-bottom:14px;">Continue as:</p>
+      <div class="role-grid cols2">
+        <div class="role-card" onclick="goto('s-login-user')">
+          <div class="icon">👤</div>
+          <div class="name">User</div>
+          <div class="desc">Personal account</div>
+        </div>
+        <div class="role-card" onclick="goto('s-login-admin')">
+          <div class="icon">🛡️</div>
+          <div class="name">Admin</div>
+          <div class="desc">Organisation admin</div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Signup roles -->
+    <div id="signup-roles" style="display:none;">
+      <p style="color:var(--muted);font-size:13px;margin-bottom:14px;">Register as:</p>
+      <div class="role-grid cols3">
+        <div class="role-card" onclick="goto('s-su-user')">
+          <div class="icon">👤</div>
+          <div class="name">User</div>
+          <div class="desc">Personal</div>
+        </div>
+        <div class="role-card" onclick="goto('s-su-admin')">
+          <div class="icon">🛡️</div>
+          <div class="name">Admin</div>
+          <div class="desc">Org. Admin</div>
+        </div>
+        <div class="role-card" onclick="goto('s-su-org')">
+          <div class="icon">🏢</div>
+          <div class="name">Org.</div>
+          <div class="desc">Organisation</div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ══════════════════════════════════
+       S1 · Login — User
+  ══════════════════════════════════ -->
+  <div class="screen" id="s-login-user">
+    <div class="breadcrumb">
+      <span class="crumb">Login</span><span class="crumb-sep">›</span>
+      <span class="crumb active">User</span>
+    </div>
+    <div class="badge badge-y">👤 User Login</div>
+    <h1>Sign <span class="hy">In.</span></h1>
+    <p class="subtitle">Enter your credentials to access your account.</p>
+
+    <label>Email or Phone Number</label>
+    <div class="input-wrap">
+      <span class="pfx">📧</span>
+      <input type="text" id="lu-contact" placeholder="email@example.com or +91 98765 43210"/>
+    </div>
+
+    <label>Password</label>
+    <div class="pw-wrap">
+      <span class="pfx">🔒</span>
+      <input type="password" id="lu-pw" placeholder="Enter your password"/>
+      <button class="pw-toggle" onclick="togglePw('lu-pw',this)">👁</button>
+    </div>
+
+    <button class="primary" id="lu-btn" onclick="loginUser()">
+      <span id="lu-lbl">Log In →</span>
+      <div class="btn-loader" id="lu-spin"></div>
+    </button>
+    <p class="msg" id="lu-msg"></p>
+    <button class="back-link" onclick="goto('s-home')">← Back to options</button>
+  </div>
+
+  <!-- ══════════════════════════════════
+       S2 · Login — Admin
+  ══════════════════════════════════ -->
+  <div class="screen" id="s-login-admin">
+    <div class="breadcrumb">
+      <span class="crumb">Login</span><span class="crumb-sep">›</span>
+      <span class="crumb active">Admin</span>
+    </div>
+    <div class="badge badge-p">🛡️ Admin Login</div>
+    <h1>Admin <span class="hp">Portal.</span></h1>
+    <p class="subtitle">Restricted access — authorised personnel only.</p>
+
+    <label>Admin Email ID</label>
+    <div class="input-wrap">
+      <span class="pfx">📧</span>
+      <input type="email" id="la-email" placeholder="admin@organisation.com"/>
+    </div>
+
+    <label>Password</label>
+    <div class="pw-wrap">
+      <span class="pfx">🔒</span>
+      <input type="password" id="la-pw" placeholder="Enter your password"/>
+      <button class="pw-toggle" onclick="togglePw('la-pw',this)">👁</button>
+    </div>
+
+    <button class="primary pur" id="la-btn" onclick="loginAdmin()">
+      <span id="la-lbl">Log In →</span>
+      <div class="btn-loader" id="la-spin"></div>
+    </button>
+    <p class="msg" id="la-msg"></p>
+    <button class="back-link" onclick="goto('s-home')">← Back to options</button>
+  </div>
+
+  <!-- ══════════════════════════════════
+       S3 · Sign Up — User  (details)
+  ══════════════════════════════════ -->
+  <div class="screen" id="s-su-user">
+    <div class="breadcrumb">
+      <span class="crumb">Sign Up</span><span class="crumb-sep">›</span>
+      <span class="crumb active">User · Details</span>
+    </div>
+    <div class="badge badge-y">👤 Create Account</div>
+    <h1>Join <span class="hy">Us.</span></h1>
+    <p class="subtitle">Create your personal account.</p>
+
+    <label>Full Name</label>
+    <div class="input-wrap">
+      <span class="pfx">✏️</span>
+      <input type="text" id="su-name" placeholder="Your full name"/>
+    </div>
+
+    <label>Contact — Phone or Email</label>
+    <div class="contact-choice">
+      <button class="choice-pill active" id="pill-phone" onclick="switchContact('phone')">📱 Phone</button>
+      <button class="choice-pill"        id="pill-email" onclick="switchContact('email')">📧 Email</button>
+    </div>
+    <div class="input-wrap" id="su-phone-wrap">
+      <span class="pfx">📱</span>
+      <input type="tel" id="su-phone" placeholder="+91 98765 43210" maxlength="15"/>
+    </div>
+    <div class="input-wrap" id="su-email-wrap" style="display:none;">
+      <span class="pfx">📧</span>
+      <input type="email" id="su-email" placeholder="you@example.com"/>
+    </div>
+
+    <button class="primary" id="su-otp-btn" onclick="sendUserOTP()">
+      <span id="su-otp-lbl">Send OTP →</span>
+      <div class="btn-loader" id="su-otp-spin"></div>
+    </button>
+    <p class="msg" id="su-msg"></p>
+    <button class="back-link" onclick="goto('s-home')">← Back to options</button>
+  </div>
+
+  <!-- ══════════════════════════════════
+       S4 · Sign Up — User  (OTP verify)
+  ══════════════════════════════════ -->
+  <div class="screen" id="s-su-user-otp">
+    <div class="breadcrumb">
+      <span class="crumb">Sign Up</span><span class="crumb-sep">›</span>
+      <span class="crumb">User</span><span class="crumb-sep">›</span>
+      <span class="crumb active">Verify OTP</span>
+    </div>
+    <div class="badge badge-y">🔐 Verify</div>
+    <h1>Verify <span class="hy">OTP.</span></h1>
+    <p class="subtitle" id="su-otp-sub">OTP sent to your contact.</p>
+
+    <label>Enter 6-digit OTP</label>
+    <div class="otp-group" id="su-otp-grp">
+      <input class="np" type="text" maxlength="1" inputmode="numeric"/>
+      <input class="np" type="text" maxlength="1" inputmode="numeric"/>
+      <input class="np" type="text" maxlength="1" inputmode="numeric"/>
+      <input class="np" type="text" maxlength="1" inputmode="numeric"/>
+      <input class="np" type="text" maxlength="1" inputmode="numeric"/>
+      <input class="np" type="text" maxlength="1" inputmode="numeric"/>
+    </div>
+
+    <button class="primary" id="su-ver-btn" onclick="verifyUserOTP()">
+      <span id="su-ver-lbl">Verify →</span>
+      <div class="btn-loader" id="su-ver-spin"></div>
+    </button>
+    <div class="timer" id="su-timer">Resend in <span id="su-cd">30</span>s</div>
+    <button class="resend-btn" id="su-resend" onclick="resendUserOTP()">↺ Resend OTP</button>
+    <p class="msg" id="su-ver-msg"></p>
+    <button class="back-link" onclick="goto('s-su-user')">← Change contact</button>
+  </div>
+
+  <!-- ══════════════════════════════════
+       S5 · Sign Up — User  (set password)
+  ══════════════════════════════════ -->
+  <div class="screen" id="s-su-user-pw">
+    <div class="breadcrumb">
+      <span class="crumb">Sign Up</span><span class="crumb-sep">›</span>
+      <span class="crumb">User</span><span class="crumb-sep">›</span>
+      <span class="crumb active">Set Password</span>
+    </div>
+    <div class="badge badge-y">🔑 Almost done!</div>
+    <h1>Set <span class="hy">Pass.</span></h1>
+    <p class="subtitle">Choose a strong password for your account.</p>
+
+    <label>New Password</label>
+    <div class="pw-wrap">
+      <span class="pfx">🔒</span>
+      <input type="password" id="su-pw1" placeholder="Create a strong password"/>
+      <button class="pw-toggle" onclick="togglePw('su-pw1',this)">👁</button>
+    </div>
+
+    <label>Confirm Password</label>
+    <div class="pw-wrap">
+      <span class="pfx">🔒</span>
+      <input type="password" id="su-pw2" placeholder="Repeat password"/>
+      <button class="pw-toggle" onclick="togglePw('su-pw2',this)">👁</button>
+    </div>
+
+    <button class="primary" id="su-pw-btn" onclick="completeUserSignup()">
+      <span id="su-pw-lbl">Create Account →</span>
+      <div class="btn-loader" id="su-pw-spin"></div>
+    </button>
+    <p class="msg" id="su-pw-msg"></p>
+  </div>
+
+  <!-- ══════════════════════════════════
+       S6 · Sign Up — Admin
+  ══════════════════════════════════ -->
+  <div class="screen" id="s-su-admin">
+    <div class="breadcrumb">
+      <span class="crumb">Sign Up</span><span class="crumb-sep">›</span>
+      <span class="crumb active">Admin</span>
+    </div>
+    <div class="badge badge-p">🛡️ Admin Registration</div>
+    <h1>Register <span class="hp">Admin.</span></h1>
+    <p class="subtitle">Register as an organisation administrator.</p>
+
+    <label>Admin Name</label>
+    <div class="input-wrap">
+      <span class="pfx">✏️</span>
+      <input type="text" id="sa-name" placeholder="Full name"/>
+    </div>
+
+    <label>Admin Email ID (org-provided)</label>
+    <div class="input-wrap">
+      <span class="pfx">📧</span>
+      <input type="email" id="sa-email" placeholder="admin@organisation.com"/>
+    </div>
+
+    <label>Organisation Registration Number</label>
+    <div class="input-wrap">
+      <span class="pfx">🏢</span>
+      <input type="text" id="sa-org-reg" placeholder="e.g. ORG-XXXXXXXX"/>
+    </div>
+
+    <label>Organisation Password</label>
+    <div class="pw-wrap">
+      <span class="pfx">🔒</span>
+      <input type="password" id="sa-org-pw" placeholder="Organisation master password"/>
+      <button class="pw-toggle" onclick="togglePw('sa-org-pw',this)">👁</button>
+    </div>
+
+    <label>Set Personal Password</label>
+    <div class="pw-wrap">
+      <span class="pfx">🔑</span>
+      <input type="password" id="sa-pw" placeholder="Your personal login password"/>
+      <button class="pw-toggle" onclick="togglePw('sa-pw',this)">👁</button>
+    </div>
+
+    <button class="primary pur" id="sa-btn" onclick="signupAdmin()">
+      <span id="sa-lbl">Register as Admin →</span>
+      <div class="btn-loader" id="sa-spin"></div>
+    </button>
+    <p class="msg" id="sa-msg"></p>
+    <button class="back-link" onclick="goto('s-home')">← Back to options</button>
+  </div>
+
+  <!-- ══════════════════════════════════
+       S7 · Sign Up — Organisation
+  ══════════════════════════════════ -->
+  <div class="screen" id="s-su-org">
+    <div class="breadcrumb">
+      <span class="crumb">Sign Up</span><span class="crumb-sep">›</span>
+      <span class="crumb active">Organisation</span>
+    </div>
+    <div class="badge badge-o">🏢 Org. Registration</div>
+    <h1>Register <span class="ho">Org.</span></h1>
+    <p class="subtitle">Register your organisation on the platform.</p>
+
+    <label>Organisation Name</label>
+    <div class="input-wrap">
+      <span class="pfx">🏢</span>
+      <input type="text" id="so-name" placeholder="Company / Organisation name"/>
+    </div>
+
+    <label>Organisation Address</label>
+    <div class="input-wrap">
+      <span class="pfx">📍</span>
+      <input type="text" id="so-addr" placeholder="Full registered address"/>
+    </div>
+
+    <label>Govt. Registration Number</label>
+    <div class="input-wrap">
+      <span class="pfx">📄</span>
+      <input type="text" id="so-reg" placeholder="CIN / GST / Registration no."/>
+    </div>
+
+    <label>Set Organisation Password</label>
+    <div class="pw-wrap">
+      <span class="pfx">🔒</span>
+      <input type="password" id="so-pw1" placeholder="Create a strong password"/>
+      <button class="pw-toggle" onclick="togglePw('so-pw1',this)">👁</button>
+    </div>
+
+    <label>Confirm Password</label>
+    <div class="pw-wrap">
+      <span class="pfx">🔒</span>
+      <input type="password" id="so-pw2" placeholder="Repeat password"/>
+      <button class="pw-toggle" onclick="togglePw('so-pw2',this)">👁</button>
+    </div>
+
+    <button class="primary ora" id="so-btn" onclick="signupOrg()">
+      <span id="so-lbl">Register Organisation →</span>
+      <div class="btn-loader" id="so-spin"></div>
+    </button>
+    <p class="msg" id="so-msg"></p>
+    <button class="back-link" onclick="goto('s-home')">← Back to options</button>
+  </div>
+
+  <!-- ══════════════════════════════════
+       S8 · Success
+  ══════════════════════════════════ -->
+  <div class="screen" id="s-ok">
+    <div style="text-align:center;padding:24px 0 8px;">
+      <div style="font-size:64px;margin-bottom:16px;" id="ok-icon">✅</div>
+      <h1 id="ok-title" style="font-size:40px;margin-bottom:10px;"></h1>
+      <p class="subtitle" id="ok-sub" style="text-align:center;"></p>
+      <button class="primary" style="margin-top:20px;" onclick="goto('s-home')">← Back to Login</button>
+    </div>
+  </div>
+
+</div><!-- /card -->
+
+<script>
+ const API = 'http://localhost:8080';
+  let timerInterval;
+  let suMode = 'phone'; // 'phone' | 'email'
+  let suVerifiedContact = ''; // contact that passed OTP
+
+  // ── Screen nav ───────────────────────────────────────────────────
+  function goto(id) {
+    document.querySelectorAll('.screen').forEach(s => s.classList.remove('active'));
+    document.getElementById(id).classList.add('active');
+  }
+
+  function switchTab(tab) {
+    document.getElementById('tab-login').classList.toggle('active', tab === 'login');
+    document.getElementById('tab-signup').classList.toggle('active', tab === 'signup');
+    document.getElementById('login-roles').style.display  = tab === 'login'  ? 'block' : 'none';
+    document.getElementById('signup-roles').style.display = tab === 'signup' ? 'block' : 'none';
+  }
+
+  // ── Helpers ──────────────────────────────────────────────────────
+  function togglePw(id, btn) {
+    const i = document.getElementById(id);
+    i.type = i.type === 'password' ? 'text' : 'password';
+    btn.textContent = i.type === 'password' ? '👁' : '🙈';
+  }
+
+  function switchContact(m) {
+    suMode = m;
+    document.getElementById('pill-phone').classList.toggle('active', m === 'phone');
+    document.getElementById('pill-email').classList.toggle('active', m === 'email');
+    document.getElementById('su-phone-wrap').style.display = m === 'phone' ? 'block' : 'none';
+    document.getElementById('su-email-wrap').style.display = m === 'email' ? 'block' : 'none';
+  }
+
+  function setMsg(id, text, type) {
+    const el = document.getElementById(id);
+    el.textContent = text;
+    el.className = 'msg ' + (type || '');
+  }
+
+  function setBtn(btnId, spinId, lblId, loading) {
+    document.getElementById(btnId).disabled = loading;
+    document.getElementById(spinId).style.display = loading ? 'block' : 'none';
+    document.getElementById(lblId).style.display  = loading ? 'none' : 'inline';
+  }
+
+  function fmtPhone(p) {
+    let c = p.replace(/[\s\-()]/g, '');
+    if (c.startsWith('+')) return c;
+    if (c.startsWith('91') && c.length === 12) return '+' + c;
+    if (c.length === 10) return '+91' + c;
+    return '+' + c;
+  }
+
+  async function apiFetch(path, body) {
+    const r = await fetch(API + path, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(body),
+    });
+    const data = await r.json();
+    return { ok: r.ok, data };
+  }
+
+  // ── OTP boxes ────────────────────────────────────────────────────
+  function initOTP(grpId) {
+    const boxes = [...document.querySelectorAll(`#${grpId} input`)];
+    boxes.forEach((b, i) => {
+      b.value = '';
+      b.addEventListener('input', () => {
+        b.value = b.value.replace(/\D/g, '');
+        if (b.value && i < boxes.length - 1) boxes[i+1].focus();
+      });
+      b.addEventListener('keydown', e => {
+        if (e.key === 'Backspace' && !b.value && i > 0) boxes[i-1].focus();
+      });
+      b.addEventListener('paste', e => {
+        const t = (e.clipboardData||window.clipboardData).getData('text').replace(/\D/g,'').slice(0,6);
+        if (t.length === 6) { boxes.forEach((x,j) => x.value = t[j]||''); boxes[5].focus(); e.preventDefault(); }
+      });
+    });
+  }
+
+  function getOTP(grpId) {
+    return [...document.querySelectorAll(`#${grpId} input`)].map(i => i.value).join('');
+  }
+
+  function clearOTP(grpId) {
+    document.querySelectorAll(`#${grpId} input`).forEach(i => { i.value = ''; i.style.borderColor = ''; });
+  }
+
+  // ── Timer ────────────────────────────────────────────────────────
+  function startTimer(cdId, wrapId, resendId) {
+    let s = 30;
+    clearInterval(timerInterval);
+    document.getElementById(wrapId).style.display   = 'block';
+    document.getElementById(resendId).style.display = 'none';
+    document.getElementById(cdId).textContent = s;
+    timerInterval = setInterval(() => {
+      s--;
+      document.getElementById(cdId).textContent = s;
+      if (s <= 0) {
+        clearInterval(timerInterval);
+        document.getElementById(wrapId).style.display   = 'none';
+        document.getElementById(resendId).style.display = 'block';
+      }
+    }, 1000);
+  }
+
+  // ── Success screen ───────────────────────────────────────────────
+  function showSuccess(icon, title, sub) {
+    document.getElementById('ok-icon').textContent  = icon;
+    document.getElementById('ok-title').textContent = title;
+    document.getElementById('ok-sub').textContent   = sub;
+    goto('s-ok');
+  }
+
+  // ════════════════════════════════════════════════════════════════
+  //  LOGIN — USER   →  POST /login/user
+  // ════════════════════════════════════════════════════════════════
+  async function loginUser() {
+    const contact  = document.getElementById('lu-contact').value.trim();
+    const password = document.getElementById('lu-pw').value;
+    if (!contact || !password) return setMsg('lu-msg','Please fill in all fields.','err');
+
+    setBtn('lu-btn','lu-spin','lu-lbl', true);
+    try {
+      const { ok, data } = await apiFetch('/login/user', { contact, password });
+      if (ok) {
+        setMsg('lu-msg','✓ Login successful! Redirecting…','ok');
+        setTimeout(() => window.location.href = '/dashboard', 1500);
+      } else {
+        setMsg('lu-msg', data.message || 'Login failed.', 'err');
+      }
+    } catch { setMsg('lu-msg','Could not reach server.','err'); }
+    setBtn('lu-btn','lu-spin','lu-lbl', false);
+  }
+
+  // ════════════════════════════════════════════════════════════════
+  //  LOGIN — ADMIN   →  POST /login/admin
+  // ════════════════════════════════════════════════════════════════
+  async function loginAdmin() {
+    const email    = document.getElementById('la-email').value.trim();
+    const password = document.getElementById('la-pw').value;
+    if (!email || !password) return setMsg('la-msg','Please fill in all fields.','err');
+
+    setBtn('la-btn','la-spin','la-lbl', true);
+    try {
+      const { ok, data } = await apiFetch('/login/admin', { email, password });
+      if (ok) {
+        setMsg('la-msg','✓ Admin login successful! Redirecting…','ok');
+        setTimeout(() => window.location.href = '/admin', 1500);
+      } else {
+        setMsg('la-msg', data.message || 'Login failed.', 'err');
+      }
+    } catch { setMsg('la-msg','Could not reach server.','err'); }
+    setBtn('la-btn','la-spin','la-lbl', false);
+  }
+
+  // ════════════════════════════════════════════════════════════════
+  //  SIGN UP — USER  (Step 1: send OTP)  →  POST /send-otp
+  // ════════════════════════════════════════════════════════════════
+  async function sendUserOTP() {
+    const name = document.getElementById('su-name').value.trim();
+    if (!name) return setMsg('su-msg','Please enter your name.','err');
+
+    let contact;
+    if (suMode === 'phone') {
+      const raw = document.getElementById('su-phone').value.trim();
+      if (!raw || raw.replace(/\D/g,'').length < 10) return setMsg('su-msg','Enter a valid 10-digit phone number.','err');
+      contact = fmtPhone(raw);
+    } else {
+      contact = document.getElementById('su-email').value.trim();
+      if (!contact || !contact.includes('@')) return setMsg('su-msg','Enter a valid email address.','err');
+    }
+
+    setBtn('su-otp-btn','su-otp-spin','su-otp-lbl', true);
+
+    if (suMode === 'phone') {
+      // ── SMS OTP via your existing Twilio backend ──
+      try {
+        const { ok, data } = await apiFetch('/send-otp', { phone: contact });
+        if (ok) {
+          suVerifiedContact = contact;
+          document.getElementById('su-otp-sub').textContent = `OTP sent to ${contact}`;
+          goto('s-su-user-otp');
+          initOTP('su-otp-grp');
+          startTimer('su-cd','su-timer','su-resend');
+        } else {
+          setMsg('su-msg', data.message || 'Failed to send OTP.', 'err');
+        }
+      } catch { setMsg('su-msg','Could not reach server. Is it running?','err'); }
+
+    // } else {
+    //   // ── Email OTP placeholder ──
+    //   // TODO: wire up your email OTP service here (e.g. Nodemailer / SendGrid)
+    //   suVerifiedContact = contact;
+    //   document.getElementById('su-otp-sub').textContent = `OTP sent to ${contact}`;
+    //   goto('s-su-user-otp');
+    //   initOTP('su-otp-grp');
+    //   startTimer('su-cd','su-timer','su-resend');
+    // }
+    } else {
+  try {
+    const { ok, data } = await apiFetch('/send-otp', { email: contact });
+    if (ok) {
+      suVerifiedContact = contact;
+      document.getElementById('su-otp-sub').textContent = `OTP sent to ${contact}`;
+      goto('s-su-user-otp');
+      initOTP('su-otp-grp');
+      startTimer('su-cd','su-timer','su-resend');
+    } else {
+      setMsg('su-msg', data.message || 'Failed to send OTP.', 'err');
+    }
+  } catch { setMsg('su-msg','Could not reach server. Is it running?','err'); }
+}
+
+    setBtn('su-otp-btn','su-otp-spin','su-otp-lbl', false);
+  }
+
+  // ════════════════════════════════════════════════════════════════
+  //  SIGN UP — USER  (Step 2: verify OTP)  →  POST /verify-otp
+  // ════════════════════════════════════════════════════════════════
+  async function verifyUserOTP() {
+    const otp = getOTP('su-otp-grp');
+    if (otp.length < 6) return setMsg('su-ver-msg','Enter all 6 digits.','err');
+
+    setBtn('su-ver-btn','su-ver-spin','su-ver-lbl', true);
+
+    if (suMode === 'phone') {
+      try {
+        const { ok, data } = await apiFetch('/verify-otp', { phone: suVerifiedContact, otp });
+        if (ok) {
+          clearInterval(timerInterval);
+          goto('s-su-user-pw');
+        } else {
+          setMsg('su-ver-msg', data.message || 'Invalid OTP.', 'err');
+          clearOTP('su-otp-grp');
+          document.querySelectorAll('#su-otp-grp input').forEach(i => i.style.borderColor = 'var(--error)');
+          setTimeout(() => document.querySelectorAll('#su-otp-grp input').forEach(i => i.style.borderColor = ''), 700);
+          document.querySelector('#su-otp-grp input').focus();
+        }
+      } catch { setMsg('su-ver-msg','Could not reach server.','err'); }
+    // } else {
+    //   // TODO: verify email OTP via your backend
+    //   clearInterval(timerInterval);
+    //   goto('s-su-user-pw');
+    // }
+    } else {
+  try {
+    const { ok, data } = await apiFetch('/verify-otp', { email: suVerifiedContact, otp });
+    if (ok) { clearInterval(timerInterval); goto('s-su-user-pw'); }
+    else {
+      setMsg('su-ver-msg', data.message || 'Invalid OTP.', 'err');
+      clearOTP('su-otp-grp');
+      document.querySelectorAll('#su-otp-grp input').forEach(i => i.style.borderColor = 'var(--error)');
+      setTimeout(() => document.querySelectorAll('#su-otp-grp input').forEach(i => i.style.borderColor = ''), 700);
+      document.querySelector('#su-otp-grp input').focus();
+    }
+  } catch { setMsg('su-ver-msg','Could not reach server.','err'); }
+}
+    setBtn('su-ver-btn','su-ver-spin','su-ver-lbl', false);
+  }
+
+  // async function resendUserOTP() {
+  //   document.getElementById('su-resend').style.display = 'none';
+  //   clearOTP('su-otp-grp');
+  //   if (suMode === 'phone') {
+  //     await apiFetch('/send-otp', { phone: suVerifiedContact });
+  //   }
+  //   // TODO: email resend
+  //   startTimer('su-cd','su-timer','su-resend');
+  // }
+
+async function resendUserOTP() {
+    document.getElementById('su-resend').style.display = 'none';
+    clearOTP('su-otp-grp');
+    if (suMode === 'phone') {
+        await apiFetch('/send-otp', { phone: suVerifiedContact });
+    } else {
+        await apiFetch('/send-otp', { email: suVerifiedContact });
+    }
+    startTimer('su-cd', 'su-timer', 'su-resend');
+}
+
+  // ════════════════════════════════════════════════════════════════
+  //  SIGN UP — USER  (Step 3: set password)  →  POST /signup/user
+  // ════════════════════════════════════════════════════════════════
+  async function completeUserSignup() {
+    const pw1 = document.getElementById('su-pw1').value;
+    const pw2 = document.getElementById('su-pw2').value;
+    if (!pw1)       return setMsg('su-pw-msg','Please set a password.','err');
+    if (pw1 !== pw2) return setMsg('su-pw-msg','Passwords do not match.','err');
+    if (pw1.length < 6) return setMsg('su-pw-msg','Password must be at least 6 characters.','err');
+
+    const name = document.getElementById('su-name').value.trim();
+
+    setBtn('su-pw-btn','su-pw-spin','su-pw-lbl', true);
+    try {
+      const { ok, data } = await apiFetch('/signup/user', {
+        name,
+        contact: suVerifiedContact,
+        password: pw1,
+      });
+      if (ok) {
+        showSuccess('🎉','Welcome!','Your account has been created successfully.');
+      } else {
+        setMsg('su-pw-msg', data.message || 'Signup failed.', 'err');
+      }
+    } catch { setMsg('su-pw-msg','Could not reach server.','err'); }
+    setBtn('su-pw-btn','su-pw-spin','su-pw-lbl', false);
+  }
+
+  // ════════════════════════════════════════════════════════════════
+  //  SIGN UP — ADMIN  →  POST /signup/admin
+  // ════════════════════════════════════════════════════════════════
+  async function signupAdmin() {
+    const adminName           = document.getElementById('sa-name').value.trim();
+    const adminEmail          = document.getElementById('sa-email').value.trim();
+    const orgRegistrationNumber = document.getElementById('sa-org-reg').value.trim();
+    const orgPassword         = document.getElementById('sa-org-pw').value;
+    const personalPassword    = document.getElementById('sa-pw').value;
+
+    if (!adminName||!adminEmail||!orgRegistrationNumber||!orgPassword||!personalPassword)
+      return setMsg('sa-msg','Please fill in all fields.','err');
+    if (!adminEmail.includes('@'))
+      return setMsg('sa-msg','Enter a valid email address.','err');
+
+    setBtn('sa-btn','sa-spin','sa-lbl', true);
+    try {
+      const { ok, data } = await apiFetch('/signup/admin', {
+        adminName, adminEmail, orgRegistrationNumber, orgPassword, personalPassword,
+      });
+      if (ok) {
+        showSuccess('🛡️','Admin Registered!','Your admin account has been created. Awaiting organisation approval.');
+      } else {
+        setMsg('sa-msg', data.message || 'Registration failed.', 'err');
+      }
+    } catch { setMsg('sa-msg','Could not reach server.','err'); }
+    setBtn('sa-btn','sa-spin','sa-lbl', false);
+  }
+
+  // ════════════════════════════════════════════════════════════════
+  //  SIGN UP — ORGANISATION  →  POST /signup/organisation
+  // ════════════════════════════════════════════════════════════════
+  async function signupOrg() {
+    const orgName             = document.getElementById('so-name').value.trim();
+    const orgAddress          = document.getElementById('so-addr').value.trim();
+    const govtRegistrationNumber = document.getElementById('so-reg').value.trim();
+    const password            = document.getElementById('so-pw1').value;
+    const confirmPassword     = document.getElementById('so-pw2').value;
+
+    if (!orgName||!orgAddress||!govtRegistrationNumber||!password||!confirmPassword)
+      return setMsg('so-msg','Please fill in all fields.','err');
+    if (password !== confirmPassword)
+      return setMsg('so-msg','Passwords do not match.','err');
+
+    setBtn('so-btn','so-spin','so-lbl', true);
+    try {
+      const { ok, data } = await apiFetch('/signup/organisation', {
+        orgName, orgAddress, govtRegistrationNumber, password, confirmPassword,
+      });
+      if (ok) {
+        showSuccess('🏢','Organisation Registered!','Your organisation is now on the platform. You may add admins.');
+      } else {
+        setMsg('so-msg', data.message || 'Registration failed.', 'err');
+      }
+    } catch { setMsg('so-msg','Could not reach server.','err'); }
+    setBtn('so-btn','so-spin','so-lbl', false);
+  }
+
+  // ── Enter key support ────────────────────────────────────────────
+  document.addEventListener('keydown', e => {
+    if (e.key !== 'Enter') return;
+    const id = (document.querySelector('.screen.active')||{}).id;
+    if (id === 's-login-user')    loginUser();
+    else if (id === 's-login-admin')   loginAdmin();
+    else if (id === 's-su-user')       sendUserOTP();
+    else if (id === 's-su-user-otp')   verifyUserOTP();
+    else if (id === 's-su-user-pw')    completeUserSignup();
+    else if (id === 's-su-admin')      signupAdmin();
+    else if (id === 's-su-org')        signupOrg();
+  });
+</script>
+</body>
+</html>

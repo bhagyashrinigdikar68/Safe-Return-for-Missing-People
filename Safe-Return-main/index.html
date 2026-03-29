@@ -58,38 +58,180 @@
         </main>
     </div>
 
-    <div id="loginModal" class="modal-overlay">
-        <div class="login-card">
-            <div class="login-header">
-                <div class="logo-circle"><i class="fas fa-heart"></i></div>
-                <span class="logo-text">Safe Return</span>
+        <!-- ══════════════ AUTH MODAL ══════════════ -->
+    <div id="loginModal" class="modal-overlay" onclick="handleModalBackdropClick(event)">
+      <div class="auth-card" id="authCard">
+
+        <!-- S0 · Home -->
+        <div class="screen active" id="s-home">
+          <div style="text-align:center;margin-bottom:16px;">
+            <div class="logo-circle" style="margin:0 auto 8px;"><i class="fas fa-heart"></i></div>
+            <span class="logo-text">Safe Return</span>
+          </div>
+          <div class="badge badge-y">✦ Secure Access</div>
+          <h1 class="auth-h1">Welcome <span class="hy">Back.</span></h1>
+          <p class="auth-subtitle">Sign in or create a new account to continue.</p>
+          <div class="tab-group">
+            <button class="tab-btn active" id="tab-login"  onclick="switchTab('login')">Log In</button>
+            <button class="tab-btn"        id="tab-signup" onclick="switchTab('signup')">Sign Up</button>
+          </div>
+          <div id="login-roles">
+            <p style="color:#6b6b80;font-size:13px;margin-bottom:14px;">Continue as:</p>
+            <div class="role-grid cols2">
+              <div class="role-card" onclick="goto('s-login-user')"><div class="auth-icon">👤</div><div class="role-name">User</div><div class="role-desc">Personal account</div></div>
+              <div class="role-card" onclick="goto('s-login-admin')"><div class="auth-icon">🛡️</div><div class="role-name">Admin</div><div class="role-desc">Organisation admin</div></div>
             </div>
-            <h2>Login</h2>
-            <p class="login-subtext">Welcome back to reunite families</p>
-            <form id="authForm">
-                <div class="input-field">
-                    <label>Email</label>
-                    <div class="field-box"><i class="far fa-envelope"></i><input type="email" id="emailInput" placeholder="Enter your email" required></div>
-                </div>
-                <div class="input-field">
-                    <label>Password</label>
-                    <div class="field-box"><i class="fas fa-lock"></i><input type="password" id="passInput" placeholder="Enter your password" required></div>
-                </div>
-                <div class="input-field">
-                    <label>Role</label>
-                    <div class="field-box"><i class="far fa-user"></i>
-                        <select id="roleInput">
-                            <option>Public</option>
-                            <option>Volunteer</option>
-                            <option>Admin</option>
-                        </select>
-                    </div>
-                </div>
-                <button type="button" class="submit-btn" onclick="handleLogin()">Login</button>
-            </form>
-            <p class="reg-link">Don't have an account? <a href="#">Register here</a></p>
-            <button class="back-link" onclick="closeLogin()">← Back to Home</button>
+          </div>
+          <div id="signup-roles" style="display:none;">
+            <p style="color:#6b6b80;font-size:13px;margin-bottom:14px;">Register as:</p>
+            <div class="role-grid cols3">
+              <div class="role-card" onclick="goto('s-su-user')"><div class="auth-icon">👤</div><div class="role-name">User</div><div class="role-desc">Personal</div></div>
+              <div class="role-card" onclick="goto('s-su-admin')"><div class="auth-icon">🛡️</div><div class="role-name">Admin</div><div class="role-desc">Org. Admin</div></div>
+              <div class="role-card" onclick="goto('s-su-org')"><div class="auth-icon">🏢</div><div class="role-name">Org.</div><div class="role-desc">Organisation</div></div>
+            </div>
+          </div>
+          <button class="auth-back-link" onclick="closeLogin()">← Back to Home</button>
         </div>
+
+        <!-- S1 · Login User -->
+        <div class="screen" id="s-login-user">
+          <div class="breadcrumb"><span class="crumb">Login</span><span class="crumb-sep">›</span><span class="crumb active">User</span></div>
+          <div class="badge badge-y">👤 User Login</div>
+          <h1 class="auth-h1">Sign <span class="hy">In.</span></h1>
+          <p class="auth-subtitle">Enter your credentials to access your account.</p>
+          <label class="auth-label">Email or Phone Number</label>
+          <div class="auth-input-wrap"><span class="auth-pfx">📧</span><input type="text" id="lu-contact" placeholder="email@example.com or +91 98765 43210"/></div>
+          <label class="auth-label">Password</label>
+          <div class="auth-pw-wrap"><span class="auth-pfx">🔒</span><input type="password" id="lu-pw" placeholder="Enter your password"/><button class="auth-pw-toggle" onclick="togglePw('lu-pw',this)">👁</button></div>
+          <button class="auth-primary" id="lu-btn" onclick="authLoginUser()"><span id="lu-lbl">Log In →</span><div class="auth-btn-loader" id="lu-spin"></div></button>
+          <p class="auth-msg" id="lu-msg"></p>
+          <button class="auth-back-link" onclick="goto('s-home')">← Back to options</button>
+        </div>
+
+        <!-- S2 · Login Admin -->
+        <div class="screen" id="s-login-admin">
+          <div class="breadcrumb"><span class="crumb">Login</span><span class="crumb-sep">›</span><span class="crumb active">Admin</span></div>
+          <div class="badge badge-p">🛡️ Admin Login</div>
+          <h1 class="auth-h1">Admin <span class="hp">Portal.</span></h1>
+          <p class="auth-subtitle">Restricted access — authorised personnel only.</p>
+          <label class="auth-label">Admin Email</label>
+          <div class="auth-input-wrap"><span class="auth-pfx">📧</span><input type="email" id="la-email" placeholder="admin@organisation.com"/></div>
+          <label class="auth-label">Password</label>
+          <div class="auth-pw-wrap"><span class="auth-pfx">🔒</span><input type="password" id="la-pw" placeholder="Enter your password"/><button class="auth-pw-toggle" onclick="togglePw('la-pw',this)">👁</button></div>
+          <button class="auth-primary pur" id="la-btn" onclick="authLoginAdmin()"><span id="la-lbl">Log In →</span><div class="auth-btn-loader" id="la-spin"></div></button>
+          <p class="auth-msg" id="la-msg"></p>
+          <button class="auth-back-link" onclick="goto('s-home')">← Back to options</button>
+        </div>
+
+        <!-- S3 · Signup User Details -->
+        <div class="screen" id="s-su-user">
+          <div class="breadcrumb"><span class="crumb">Sign Up</span><span class="crumb-sep">›</span><span class="crumb active">User</span></div>
+          <div class="badge badge-y">👤 Create Account</div>
+          <h1 class="auth-h1">Join <span class="hy">Us.</span></h1>
+          <p class="auth-subtitle">Create your personal account.</p>
+          <label class="auth-label">Full Name</label>
+          <div class="auth-input-wrap"><span class="auth-pfx">✏️</span><input type="text" id="su-name" placeholder="Your full name"/></div>
+          <label class="auth-label">Contact — Phone or Email</label>
+          <div class="contact-choice">
+            <button class="choice-pill active" id="pill-phone" onclick="switchContact('phone')">📱 Phone</button>
+            <button class="choice-pill" id="pill-email" onclick="switchContact('email')">📧 Email</button>
+          </div>
+          <div class="auth-input-wrap" id="su-phone-wrap"><span class="auth-pfx">📱</span><input type="tel" id="su-phone" placeholder="+91 98765 43210" maxlength="15"/></div>
+          <div class="auth-input-wrap" id="su-email-wrap" style="display:none;"><span class="auth-pfx">📧</span><input type="email" id="su-email" placeholder="you@example.com"/></div>
+          <button class="auth-primary" id="su-otp-btn" onclick="sendUserOTP()"><span id="su-otp-lbl">Send OTP →</span><div class="auth-btn-loader" id="su-otp-spin"></div></button>
+          <p class="auth-msg" id="su-msg"></p>
+          <button class="auth-back-link" onclick="goto('s-home')">← Back to options</button>
+        </div>
+
+        <!-- S4 · OTP Verify -->
+        <div class="screen" id="s-su-user-otp">
+          <div class="breadcrumb"><span class="crumb">Sign Up</span><span class="crumb-sep">›</span><span class="crumb">User</span><span class="crumb-sep">›</span><span class="crumb active">Verify OTP</span></div>
+          <div class="badge badge-y">🔐 Verify</div>
+          <h1 class="auth-h1">Verify <span class="hy">OTP.</span></h1>
+          <p class="auth-subtitle" id="su-otp-sub">OTP sent to your contact.</p>
+          <label class="auth-label">Enter 6-digit OTP</label>
+          <div class="otp-group" id="su-otp-grp">
+            <input class="otp-input" type="text" maxlength="1" inputmode="numeric"/>
+            <input class="otp-input" type="text" maxlength="1" inputmode="numeric"/>
+            <input class="otp-input" type="text" maxlength="1" inputmode="numeric"/>
+            <input class="otp-input" type="text" maxlength="1" inputmode="numeric"/>
+            <input class="otp-input" type="text" maxlength="1" inputmode="numeric"/>
+            <input class="otp-input" type="text" maxlength="1" inputmode="numeric"/>
+          </div>
+          <button class="auth-primary" id="su-ver-btn" onclick="verifyUserOTP()"><span id="su-ver-lbl">Verify →</span><div class="auth-btn-loader" id="su-ver-spin"></div></button>
+          <div class="auth-timer" id="su-timer">Resend in <span id="su-cd">30</span>s</div>
+          <button class="auth-resend-btn" id="su-resend" onclick="resendUserOTP()">↺ Resend OTP</button>
+          <p class="auth-msg" id="su-ver-msg"></p>
+          <button class="auth-back-link" onclick="goto('s-su-user')">← Change contact</button>
+        </div>
+
+        <!-- S5 · Set Password -->
+        <div class="screen" id="s-su-user-pw">
+          <div class="breadcrumb"><span class="crumb">Sign Up</span><span class="crumb-sep">›</span><span class="crumb">User</span><span class="crumb-sep">›</span><span class="crumb active">Set Password</span></div>
+          <div class="badge badge-y">🔑 Almost done!</div>
+          <h1 class="auth-h1">Set <span class="hy">Pass.</span></h1>
+          <p class="auth-subtitle">Choose a strong password for your account.</p>
+          <label class="auth-label">New Password</label>
+          <div class="auth-pw-wrap"><span class="auth-pfx">🔒</span><input type="password" id="su-pw1" placeholder="Create a strong password"/><button class="auth-pw-toggle" onclick="togglePw('su-pw1',this)">👁</button></div>
+          <label class="auth-label">Confirm Password</label>
+          <div class="auth-pw-wrap"><span class="auth-pfx">🔒</span><input type="password" id="su-pw2" placeholder="Repeat password"/><button class="auth-pw-toggle" onclick="togglePw('su-pw2',this)">👁</button></div>
+          <button class="auth-primary" id="su-pw-btn" onclick="completeUserSignup()"><span id="su-pw-lbl">Create Account →</span><div class="auth-btn-loader" id="su-pw-spin"></div></button>
+          <p class="auth-msg" id="su-pw-msg"></p>
+        </div>
+
+        <!-- S6 · Signup Admin -->
+        <div class="screen" id="s-su-admin">
+          <div class="breadcrumb"><span class="crumb">Sign Up</span><span class="crumb-sep">›</span><span class="crumb active">Admin</span></div>
+          <div class="badge badge-p">🛡️ Admin Registration</div>
+          <h1 class="auth-h1">Register <span class="hp">Admin.</span></h1>
+          <p class="auth-subtitle">Register as an organisation administrator.</p>
+          <label class="auth-label">Admin Name</label>
+          <div class="auth-input-wrap"><span class="auth-pfx">✏️</span><input type="text" id="sa-name" placeholder="Full name"/></div>
+          <label class="auth-label">Admin Email</label>
+          <div class="auth-input-wrap"><span class="auth-pfx">📧</span><input type="email" id="sa-email" placeholder="admin@organisation.com"/></div>
+          <label class="auth-label">Organisation Registration Number</label>
+          <div class="auth-input-wrap"><span class="auth-pfx">🏢</span><input type="text" id="sa-org-reg" placeholder="e.g. ORG-XXXXXXXX"/></div>
+          <label class="auth-label">Organisation Password</label>
+          <div class="auth-pw-wrap"><span class="auth-pfx">🔒</span><input type="password" id="sa-org-pw" placeholder="Organisation master password"/><button class="auth-pw-toggle" onclick="togglePw('sa-org-pw',this)">👁</button></div>
+          <label class="auth-label">Personal Password</label>
+          <div class="auth-pw-wrap"><span class="auth-pfx">🔑</span><input type="password" id="sa-pw" placeholder="Your personal login password"/><button class="auth-pw-toggle" onclick="togglePw('sa-pw',this)">👁</button></div>
+          <button class="auth-primary pur" id="sa-btn" onclick="signupAdmin()"><span id="sa-lbl">Register as Admin →</span><div class="auth-btn-loader" id="sa-spin"></div></button>
+          <p class="auth-msg" id="sa-msg"></p>
+          <button class="auth-back-link" onclick="goto('s-home')">← Back to options</button>
+        </div>
+
+        <!-- S7 · Signup Organisation -->
+        <div class="screen" id="s-su-org">
+          <div class="breadcrumb"><span class="crumb">Sign Up</span><span class="crumb-sep">›</span><span class="crumb active">Organisation</span></div>
+          <div class="badge badge-o">🏢 Org. Registration</div>
+          <h1 class="auth-h1">Register <span class="ho">Org.</span></h1>
+          <p class="auth-subtitle">Register your organisation on the platform.</p>
+          <label class="auth-label">Organisation Name</label>
+          <div class="auth-input-wrap"><span class="auth-pfx">🏢</span><input type="text" id="so-name" placeholder="Company / Organisation name"/></div>
+          <label class="auth-label">Organisation Address</label>
+          <div class="auth-input-wrap"><span class="auth-pfx">📍</span><input type="text" id="so-addr" placeholder="Full registered address"/></div>
+          <label class="auth-label">Govt. Registration Number</label>
+          <div class="auth-input-wrap"><span class="auth-pfx">📄</span><input type="text" id="so-reg" placeholder="CIN / GST / Registration no."/></div>
+          <label class="auth-label">Set Password</label>
+          <div class="auth-pw-wrap"><span class="auth-pfx">🔒</span><input type="password" id="so-pw1" placeholder="Create a strong password"/><button class="auth-pw-toggle" onclick="togglePw('so-pw1',this)">👁</button></div>
+          <label class="auth-label">Confirm Password</label>
+          <div class="auth-pw-wrap"><span class="auth-pfx">🔒</span><input type="password" id="so-pw2" placeholder="Repeat password"/><button class="auth-pw-toggle" onclick="togglePw('so-pw2',this)">👁</button></div>
+          <button class="auth-primary ora" id="so-btn" onclick="signupOrg()"><span id="so-lbl">Register Organisation →</span><div class="auth-btn-loader" id="so-spin"></div></button>
+          <p class="auth-msg" id="so-msg"></p>
+          <button class="auth-back-link" onclick="goto('s-home')">← Back to options</button>
+        </div>
+
+        <!-- S8 · Success -->
+        <div class="screen" id="s-ok">
+          <div style="text-align:center;padding:24px 0 8px;">
+            <div style="font-size:64px;margin-bottom:16px;" id="ok-icon">✅</div>
+            <h1 class="auth-h1" id="ok-title" style="font-size:36px;margin-bottom:10px;"></h1>
+            <p class="auth-subtitle" id="ok-sub" style="text-align:center;"></p>
+            <button class="auth-primary" style="margin-top:20px;" onclick="goto('s-home')">← Back to Login</button>
+          </div>
+        </div>
+
+      </div><!-- /auth-card -->
     </div>
 
     <!-- ══════════════ ADMIN DASHBOARD ══════════════ -->
@@ -943,7 +1085,7 @@
             <div class="hc-section-title">App Support</div>
             <div class="hc-support-row">
                 <i class="fas fa-envelope" style="color:#f97316;"></i>
-                <span>Email: <a href="mailto:support@safereturn.in" style="color:#f97316;font-weight:700;">support@safereturn.in</a></span>
+                <span>Email: <a href="/cdn-cgi/l/email-protection#e3909693938c9197a39082858691869796918dcd8a8d" style="color:#f97316;font-weight:700;"><span class="__cf_email__" data-cfemail="26555356564954526655474043544352535448084f48">[email&#160;protected]</span></a></span>
             </div>
             <div class="hc-support-row">
                 <i class="fas fa-clock" style="color:#f97316;"></i>
@@ -954,18 +1096,14 @@
                 <div style="font-weight:800;color:#15803d;font-size:.88rem;">🏠 Apna Ghar Ashram — Bharatpur (24×7)</div>
                 <div style="font-size:.8rem;color:#334155;">Village Bajhera, Achhnera Road, Bharatpur, Rajasthan 321001</div>
                 <a href="tel:8599999911" style="font-size:.82rem;color:#16a34a;font-weight:700;text-decoration:none;"><i class="fas fa-phone-alt"></i> 8599999911 / 8599999922</a>
-                <a href="mailto:hq@apnagharashram.org" style="font-size:.82rem;color:#059669;font-weight:700;text-decoration:none;"><i class="fas fa-envelope"></i> hq@apnagharashram.org</a>
+                <a href="/cdn-cgi/l/email-protection#4a223b0a2b3a242b2d222b382b3922382b276425382d" style="font-size:.82rem;color:#059669;font-weight:700;text-decoration:none;"><i class="fas fa-envelope"></i> <span class="__cf_email__" data-cfemail="036b724362736d62646b627162706b71626e2d6c7164">[email&#160;protected]</span></a>
             </div>
 
             <button onclick="closeHelpCenter()" class="hc-done-btn">Close</button>
         </div>
     </div>
 
-    <script src="script.js"></script>
-    <script src="connect.js"></script>
-    <script src="connect1.js"></script>
-    <script src="connect2.js"></script>
     <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
-    <script src="chatbot.js"></script>
+    <script src="script.js"></script>
 </body>
 </html>

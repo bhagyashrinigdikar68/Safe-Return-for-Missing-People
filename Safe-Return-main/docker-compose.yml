@@ -1,0 +1,55 @@
+version: "3.9"
+
+services:
+
+  # ── Flask main backend (app.py) ───────────────────────────────────────────
+  app:
+    build:
+      context: .
+      dockerfile: Dockerfile.app
+    container_name: safe-return-app
+    ports:
+      - "5001:5001"
+    environment:
+      - MONGO_URI=mongodb+srv://render_user:Vanshika0509@cluster0.6ds8ydm.mongodb.net/missing_person_db
+    volumes:
+      - photos:/app/uploads/photos
+    depends_on:
+      - notification
+    restart: unless-stopped
+
+  # ── Flask face recognition (api.py) ──────────────────────────────────────
+  api:
+    build:
+      context: .
+      dockerfile: Dockerfile.api
+    container_name: safe-return-api
+    ports:
+      - "5000:5000"
+    environment:
+      - MONGO_URI=mongodb+srv://render_user:Vanshika0509@cluster0.6ds8ydm.mongodb.net/missing_person_db
+    volumes:
+      - photos:/app/uploads/photos
+      - ./data:/app/data
+      - ./sheet.xlsx:/app/sheet.xlsx
+    depends_on:
+      - notification
+    restart: unless-stopped
+
+  # ── Spring Boot notification service ─────────────────────────────────────
+  notification:
+    build:
+      context: ../safe-return-notifications
+      dockerfile: Dockerfile
+    container_name: safe-return-notification
+    ports:
+      - "8080:8080"
+    environment:
+      - GMAIL_USER=bhagyashrinigdikar68@gmail.com
+      - GMAIL_APP_PASSWORD=uqbw octn tych esfz
+      - FAMILY_EMAILS=bnigdikar@gmail.com
+      - NTFY_TOPIC=safe-return-2026
+    restart: unless-stopped
+
+volumes:
+  photos:
