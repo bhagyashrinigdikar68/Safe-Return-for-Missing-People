@@ -1264,7 +1264,141 @@ body.dark-mode .upload-box span         { color: #64748b; }
 /* ── Form submit button ── */
 body.dark-mode .submit-report-btn       { background: #f97316; }
 
-/* ── Aadhaar section ── */
+/* ════════════════════════════════════════════
+   AADHAAR OPTIONAL SECTION — Base Styles
+════════════════════════════════════════════ */
+.aadhaar-opt-section {
+    background: #f8fafc;
+    border: 1.5px solid #e2e8f0;
+    border-radius: 14px;
+    padding: 18px 20px;
+    margin: 0 0 4px;
+}
+
+/* Header row: icon + text + toggle */
+.aadhaar-opt-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 14px;
+    flex-wrap: wrap;
+}
+
+.aadhaar-opt-left {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    flex: 1;
+}
+
+.aadhaar-opt-icon {
+    width: 38px; height: 38px;
+    border-radius: 10px;
+    background: linear-gradient(135deg, #6366f1, #4f46e5);
+    display: flex; align-items: center; justify-content: center;
+    color: #fff; font-size: 1rem;
+    flex-shrink: 0;
+}
+
+.aadhaar-opt-title {
+    font-size: .95rem;
+    font-weight: 800;
+    color: #0f172a;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    flex-wrap: wrap;
+}
+
+.aadhaar-opt-badge {
+    background: #e0e7ff;
+    color: #4338ca;
+    font-size: .7rem;
+    font-weight: 700;
+    padding: 2px 8px;
+    border-radius: 20px;
+    letter-spacing: .3px;
+}
+
+.aadhaar-opt-sub {
+    font-size: .8rem;
+    color: #64748b;
+    margin-top: 3px;
+    line-height: 1.4;
+}
+
+/* ── Toggle switch ─────────────────────── */
+.aadhaar-sw-wrap {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    cursor: pointer;
+    user-select: none;
+    flex-shrink: 0;
+}
+
+.aadhaar-sw-wrap input[type="checkbox"] {
+    display: none;                       /* hide native checkbox */
+}
+
+.aadhaar-sw-track {
+    width: 40px; height: 22px;
+    border-radius: 11px;
+    background: #cbd5e1;
+    position: relative;
+    transition: background .2s;
+    flex-shrink: 0;
+}
+
+/* the moving knob */
+.aadhaar-sw-track::after {
+    content: '';
+    position: absolute;
+    top: 3px; left: 3px;
+    width: 16px; height: 16px;
+    border-radius: 50%;
+    background: #fff;
+    box-shadow: 0 1px 4px rgba(0,0,0,.2);
+    transition: transform .2s;
+}
+
+/* checked state — move knob right + orange track */
+.aadhaar-sw-wrap input:checked ~ .aadhaar-sw-track {
+    background: #f97316;
+}
+.aadhaar-sw-wrap input:checked ~ .aadhaar-sw-track::after {
+    transform: translateX(18px);
+}
+
+.aadhaar-sw-label {
+    font-size: .85rem;
+    font-weight: 700;
+    color: #475569;
+}
+
+/* ── Info notice inside expanded area ─── */
+.aadhaar-info-notice {
+    display: flex;
+    align-items: flex-start;
+    gap: 10px;
+    background: #eff6ff;
+    border: 1px solid #bfdbfe;
+    border-radius: 10px;
+    padding: 12px 14px;
+    font-size: .82rem;
+    color: #1e40af;
+    margin-bottom: 16px;
+    line-height: 1.5;
+}
+
+.aadhaar-info-notice i {
+    font-size: .9rem;
+    margin-top: 2px;
+    flex-shrink: 0;
+    color: #3b82f6;
+}
+
+/* ── Dark mode overrides ── */
 body.dark-mode .aadhaar-opt-section     { background: #1e293b; border-color: #334155; }
 body.dark-mode .aadhaar-opt-title       { color: #f1f5f9; }
 body.dark-mode .aadhaar-opt-sub         { color: #94a3b8; }

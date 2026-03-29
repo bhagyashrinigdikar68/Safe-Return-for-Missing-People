@@ -1,0 +1,8 @@
+__pycache__/
+*.pyc
+*.pkl
+uploads/
+temp_uploads/
+target/
+*.class
+*.jar

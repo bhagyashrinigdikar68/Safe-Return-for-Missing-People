@@ -17,18 +17,22 @@ import java.time.Duration;
 /**
  * Sends FREE WhatsApp messages via CallMeBot API.
  *
- * ─── One-time setup (5 minutes) ────────────────────────────────────────────
- * 1. Save this number in your contacts:  +34 644 52 74 97  → name it "CallMeBot"
- * 2. Open WhatsApp → send this exact message to CallMeBot:
- *      I allow callmebot to send me messages
- * 3. Wait ~2 minutes → you'll receive your API key via WhatsApp
- * 4. Set in application.yml or env vars:
- *      WHATSAPP_PHONE=+919876543210   (family member's number, international format)
- *      WHATSAPP_API_KEY=xxxxxxxx
- *      notification.whatsapp.enabled=true
+ * ── KEY FIX ──────────────────────────────────────────────────────────────────
+ * BEFORE: always sent to config.getWhatsapp().getPhone()
+ *         → hardcoded "+919876543210" regardless of who filed the report
  *
- * Limit: ~38 messages/day per phone number (more than enough for alerts).
- * ───────────────────────────────────────────────────────────────────────────
+ * AFTER:  if request.getFamilyPhone() present → send to THAT phone  [NEW]
+ *         if not present                      → fall back to config phone
+ *
+ * Note: CallMeBot requires each phone number to be individually activated.
+ * See setup instructions below if the family phone hasn't been activated yet.
+ * ─────────────────────────────────────────────────────────────────────────────
+ *
+ * One-time setup per phone number:
+ *   1. Save +34 644 52 74 97 as "CallMeBot" in WhatsApp contacts
+ *   2. Send: "I allow callmebot to send me messages"
+ *   3. Receive your API key via WhatsApp (~2 min)
+ *   4. Set WHATSAPP_API_KEY in application.yml or env
  */
 @Service
 public class WhatsAppNotificationService {
@@ -38,37 +42,52 @@ public class WhatsAppNotificationService {
             "https://api.callmebot.com/whatsapp.php?phone=%s&text=%s&apikey=%s";
 
     private final NotificationConfig config;
-    private final HttpClient httpClient;
+    private final HttpClient         httpClient;
 
     public WhatsAppNotificationService(NotificationConfig config) {
-        this.config = config;
+        this.config     = config;
         this.httpClient = HttpClient.newBuilder()
                 .connectTimeout(Duration.ofSeconds(15))
                 .build();
     }
 
     /**
-     * Sends a WhatsApp message to the configured phone number.
+     * Send WhatsApp message to the appropriate phone number.
      *
-     * @return "WHATSAPP_OK" or "WHATSAPP_FAILED: <reason>" or "WHATSAPP_SKIPPED"
+     * Priority:
+     *   1. req.getFamilyPhone() ← specific reporter's phone  [NEW]
+     *   2. config phone          ← global fallback
+     *
+     * @return "WHATSAPP_OK → <phone>" or "WHATSAPP_FAILED: <reason>"
      */
     public String send(NotificationRequest req) {
         NotificationConfig.WhatsAppConfig wa = config.getWhatsapp();
 
         if (!wa.isEnabled()) {
-            return "WHATSAPP_SKIPPED (disabled – see setup instructions in WhatsAppNotificationService.java)";
+            return "WHATSAPP_SKIPPED (disabled)";
         }
 
-        if (wa.getPhone() == null || wa.getApiKey() == null
-                || wa.getPhone().isBlank() || wa.getApiKey().isBlank()) {
-            return "WHATSAPP_SKIPPED (phone/apiKey not configured)";
+        // ── Resolve target phone ──────────────────────────────────────────────
+        String targetPhone;
+        if (req.hasSpecificPhone()) {
+            targetPhone = req.getFamilyPhone();
+            log.info("Using user-specific WhatsApp phone: {}", targetPhone);
+        } else if (wa.getPhone() != null && !wa.getPhone().isBlank()) {
+            targetPhone = wa.getPhone();
+            log.warn("No family_phone in request – falling back to config phone: {}", targetPhone);
+        } else {
+            return "WHATSAPP_SKIPPED (no phone configured)";
+        }
+
+        if (wa.getApiKey() == null || wa.getApiKey().isBlank()) {
+            return "WHATSAPP_SKIPPED (apiKey not configured – see setup instructions)";
         }
 
         try {
-            String message  = buildMessage(req);
-            String encoded  = URLEncoder.encode(message, StandardCharsets.UTF_8);
-            String url      = String.format(CALLMEBOT_URL,
-                    URLEncoder.encode(wa.getPhone(), StandardCharsets.UTF_8),
+            String message = buildMessage(req);
+            String encoded = URLEncoder.encode(message, StandardCharsets.UTF_8);
+            String url     = String.format(CALLMEBOT_URL,
+                    URLEncoder.encode(targetPhone, StandardCharsets.UTF_8),
                     encoded,
                     wa.getApiKey());
 
@@ -77,19 +96,19 @@ public class WhatsAppNotificationService {
                     .GET()
                     .build();
 
-            HttpResponse<String> response = httpClient.send(
-                    request, HttpResponse.BodyHandlers.ofString());
+            HttpResponse<String> response =
+                    httpClient.send(request, HttpResponse.BodyHandlers.ofString());
 
             if (response.statusCode() == 200) {
-                log.info("WhatsApp notification sent to {}", wa.getPhone());
-                return "WHATSAPP_OK → " + wa.getPhone();
+                log.info("WhatsApp sent to {}", targetPhone);
+                return "WHATSAPP_OK → " + targetPhone;
             } else {
-                log.warn("CallMeBot returned HTTP {}: {}", response.statusCode(), response.body());
+                log.warn("CallMeBot HTTP {}: {}", response.statusCode(), response.body());
                 return "WHATSAPP_FAILED: HTTP " + response.statusCode() + " – " + response.body();
             }
 
         } catch (Exception e) {
-            log.error("WhatsApp notification failed: {}", e.getMessage());
+            log.error("WhatsApp failed: {}", e.getMessage());
             return "WHATSAPP_FAILED: " + e.getMessage();
         }
     }
@@ -98,26 +117,34 @@ public class WhatsAppNotificationService {
 
     private String buildMessage(NotificationRequest req) {
         String status   = req.isMatch() ? "✅ CONFIRMED MATCH" : "⚠️ POSSIBLE MATCH";
-        String location = req.getLocation() != null ? req.getLocation() : "Unknown";
+        String greeting = (req.getReporterName() != null && !req.getReporterName().isBlank())
+                ? "Hello " + req.getReporterName() + "," : "Hello,";
+        String missing  = (req.getMissingPersonName() != null && !req.getMissingPersonName().isBlank())
+                ? req.getMissingPersonName() : "your family member";
 
         return String.format(
-                """
-                🔍 *Safe Return Alert*
-                
-                %s
-                
-                *Person:* %s
-                *ID:* %s
-                *Confidence:* %.1f%%
-                *Location:* %s
-                
-                Please verify and take action.
-                """,
-                status,
-                req.getPersonName(),
-                req.getPersonId(),
-                req.getConfidence(),
-                location
+            """
+            ❤️ *Safe Return Alert*
+            
+            %s
+            %s
+            
+            We found a possible match for *%s*.
+            
+            *Matched Inmate:* %s
+            *ID:* %s
+            *Confidence:* %.1f%%
+            *Location:* %s
+            
+            Please log in to Safe Return to verify and take action.
+            """,
+            greeting,
+            status,
+            missing,
+            req.getPersonName(),
+            req.getPersonId(),
+            req.getConfidence(),
+            req.getLocation() != null ? req.getLocation() : "Unknown"
         );
     }
 }

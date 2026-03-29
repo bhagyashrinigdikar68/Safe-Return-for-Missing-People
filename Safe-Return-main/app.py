@@ -27,6 +27,8 @@ BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 UPLOAD_FOLDER = os.path.join(BASE_DIR, "uploads", "photos")
 os.makedirs(UPLOAD_FOLDER, exist_ok=True)
 
+
+# ── Submit lost person report (Public) ───────────────
 @app.route("/submit", methods=["POST"])
 def submit():
     data = request.form
@@ -47,11 +49,21 @@ def submit():
     except ValueError:
         return jsonify({"error": "Invalid date format."}), 400
 
-    photo_path = None
-    if photo:
+    # ── Aadhaar validation (optional fields) ──────────
+    fam_aadhaar = data.get("family_aadhaar", "").strip()
+    per_aadhaar = data.get("person_aadhaar", "").strip()
+
+    if fam_aadhaar and not re.match(r'^[2-9]\d{11}$', fam_aadhaar):
+        return jsonify({"error": "Invalid family Aadhaar number."}), 400
+    if per_aadhaar and not re.match(r'^[2-9]\d{11}$', per_aadhaar):
+        return jsonify({"error": "Invalid missing person Aadhaar number."}), 400
+
+    # ── FIX: Save photo and store URL path (not OS path) ──
+    photo_url = None
+    if photo and photo.filename:
         filename = secure_filename(photo.filename)
-        photo_path = os.path.join(UPLOAD_FOLDER, filename)
-        photo.save(photo_path)
+        photo.save(os.path.join(UPLOAD_FOLDER, filename))
+        photo_url = f"/uploads/photos/{filename}"      # ← relative URL, not OS path
 
     document = {
         "full_name":            data.get("public-fullName"),
@@ -65,23 +77,62 @@ def submit():
         "medical_condition":    data.get("medical_condition"),
         "contact_name":         data.get("public-familyName"),
         "contact_phone":        phone_number,
-        "photo_path":           photo_path.replace(os.sep, "/") if photo_path else None,
+        "contact_email":        data.get("contact_email", ""),
+        # ── Aadhaar fields ──
+        "family_aadhaar":       fam_aadhaar,
+        "person_aadhaar":       per_aadhaar,
+        # ── FIX: store URL path ──
+        "photo_path":           photo_url,
         "status":               "Missing"
     }
     collection.insert_one(document)
     return jsonify({"message": "Report submitted successfully"})
 
+
+# ── FIX: Serve uploaded photos correctly ─────────────
 @app.route("/uploads/photos/<path:filename>")
 def get_photo(filename):
-    import posixpath
-    return send_from_directory("uploads", posixpath.join("photos", filename))
+    return send_from_directory(UPLOAD_FOLDER, filename)   # ← use absolute UPLOAD_FOLDER
 
+
+# ── Submit inmate (Admin) ─────────────────────────────
+@app.route("/submit-inmate", methods=["POST"])
+def submit_inmate():
+    data  = request.form
+    photo = request.files.get("photo")
+
+    photo_url = None
+    if photo and photo.filename:
+        filename = secure_filename(photo.filename)
+        photo.save(os.path.join(UPLOAD_FOLDER, filename))
+        photo_url = f"/uploads/photos/{filename}"
+
+    document = {
+        "inmate_id":       data.get("inmate_id"),
+        "reg_no":          data.get("reg_no"),
+        "full_name":       data.get("public-fullName"),
+        "gender":          data.get("gender"),
+        "language_spoken": data.get("language_spoken"),
+        "address":         data.get("address"),
+        "admin_status":    data.get("admin-status"),
+        "joining_date":    data.get("joining_date"),
+        "dob":             data.get("dob"),
+        "photo_path":      photo_url,
+        "status":          "Active",
+        "created_at":      datetime.now().isoformat()
+    }
+    collection.insert_one(document)
+    return jsonify({"message": "Inmate registered successfully"})
+
+
+# ── Get all reports ───────────────────────────────────
 @app.route("/get-missing-reports", methods=["GET"])
 def get_missing_reports():
     reports = list(collection.find())
     for r in reports:
         r["_id"] = str(r["_id"])
     return jsonify(reports)
+
 
 @app.route("/get-reports", methods=["GET"])
 def get_reports():
@@ -91,6 +142,8 @@ def get_reports():
         r["status"] = r.get("status", "Missing")
     return jsonify(reports)
 
+
+# ── Mark as found ─────────────────────────────────────
 @app.route("/mark-found/<report_id>", methods=["POST"])
 def mark_found(report_id):
     collection.update_one(
@@ -99,6 +152,8 @@ def mark_found(report_id):
     )
     return jsonify({"message": "Marked as Found"})
 
+
+# ── Notifications ─────────────────────────────────────
 @app.route("/save-notification", methods=["POST"])
 def save_notification():
     data = request.get_json()
@@ -108,11 +163,13 @@ def save_notification():
         "message":     data.get("message", ""),
         "report_name": data.get("report_name", ""),
         "phone":       data.get("phone", ""),
+        "user_email":  data.get("user_email", ""),
         "read":        False,
         "time":        datetime.now().strftime("%d %b %Y, %I:%M %p")
     }
     notifications_collection.insert_one(document)
     return jsonify({"message": "Notification saved"})
+
 
 @app.route("/get-notifications", methods=["GET"])
 def get_notifications():
@@ -120,6 +177,7 @@ def get_notifications():
     for n in notifs:
         n["_id"] = str(n["_id"])
     return jsonify(notifs)
+
 
 @app.route("/mark-notification-read/<notif_id>", methods=["POST"])
 def mark_notification_read(notif_id):
@@ -129,10 +187,12 @@ def mark_notification_read(notif_id):
     )
     return jsonify({"message": "Marked as read"})
 
+
 @app.route("/delete-notification/<notif_id>", methods=["DELETE"])
 def delete_notification(notif_id):
     notifications_collection.delete_one({"_id": ObjectId(notif_id)})
     return jsonify({"message": "Deleted"})
+
 
 if __name__ == "__main__":
     app.run(host="0.0.0.0", port=5001, debug=False)
