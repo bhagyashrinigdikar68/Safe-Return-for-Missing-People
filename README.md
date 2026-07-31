@@ -63,8 +63,6 @@ Automatically sends alerts through:
 
 - 📧 Email
 - 📱 SMS
-- 📲 Ntfy Push Notifications
-- 💬 WhatsApp (configurable)
 
 when a possible match is detected.
 
