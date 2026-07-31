@@ -52,15 +52,9 @@ document.addEventListener('DOMContentLoaded', function() {
         ]
       },
       ngoMap: {
-        keys: ['map','ngo','shelter','nearby','find ngo','find shelter','nearest shelter','location map'],
+        keys: ['map','ngo','shelter','nearby','find ngo','find shelter','nearest shelter','location map','ngo near','shelters near','ngo in','shelter in','ngo location','shelter location'],
         title: '🗺️ NGO & Shelter Map',
-        steps: [
-          { icon:'📍', text:'Click <b>Map Navigation</b> from the dashboard or home page.' },
-          { icon:'📍', text:'Type your <b>city name</b> in the search bar and click Search.' },
-          { icon:'📍', text:'<b>Orange markers</b> = Featured NGOs | <b>Green markers</b> = OpenStreetMap NGOs.' },
-          { icon:'📍', text:'Click any marker to see the NGO name, address, and phone number.' },
-          { icon:'📍', text:'Emergency: <b>Police 100</b> | <b>Ambulance 108</b>' },
-        ]
+        steps: []
       },
       notifications: {
         keys: ['notification','alert','bell','notify','updates','news','match notification'],
@@ -334,6 +328,44 @@ document.addEventListener('DOMContentLoaded', function() {
     .sr-success .sr-check { font-size: 2.5rem; display: block; margin-bottom: 6px; }
     .sr-success p { color: #334155; font-size: .87rem; }
 
+    /* NGO cards */
+    .sr-ngo-list { display: flex; flex-direction: column; gap: 10px; margin-top: 8px; }
+    .sr-ngo-card {
+      background: #fff7ed; border: 1.5px solid #fed7aa; border-radius: 12px;
+      padding: 11px 13px;
+    }
+    .sr-ngo-card-name { font-weight: 800; font-size: .88rem; color: #9a3412; margin-bottom: 3px; }
+    .sr-ngo-card-addr { font-size: .78rem; color: #334155; margin-bottom: 6px; line-height: 1.4; }
+    .sr-ngo-map-btn {
+      display: inline-flex; align-items: center; gap: 5px;
+      background: linear-gradient(135deg,#f97316,#ea580c); color: white;
+      border: none; padding: 5px 12px; border-radius: 16px; font-size: .76rem;
+      font-weight: 700; cursor: pointer; text-decoration: none;
+      font-family: inherit; transition: opacity .2s;
+    }
+    .sr-ngo-map-btn:hover { opacity: .88; }
+    .sr-city-input-wrap { display: flex; gap: 6px; margin-top: 8px; }
+    .sr-city-input-wrap input { flex:1; border: 1.5px solid #e2e8f0; border-radius: 10px; padding: 8px 12px; font-size: .84rem; outline: none; font-family: inherit; }
+    .sr-city-input-wrap input:focus { border-color: #f97316; }
+    .sr-city-input-wrap button { background: linear-gradient(135deg,#f97316,#ea580c); color: white; border: none; padding: 8px 14px; border-radius: 10px; font-size: .82rem; font-weight: 700; cursor: pointer; font-family: inherit; }
+
+    /* Location card */
+    .sr-location-card {
+      background: #f0fdf4; border: 1.5px solid #86efac; border-radius: 12px;
+      padding: 12px 14px; margin-top: 6px;
+    }
+    .sr-location-name { font-size: 1rem; font-weight: 800; color: #166534; margin-bottom: 4px; }
+    .sr-location-address { font-size: .82rem; color: #334155; margin-bottom: 8px; line-height: 1.5; }
+    .sr-location-coords { font-size: .78rem; color: #64748b; margin-bottom: 10px; }
+    .sr-map-btn {
+      display: inline-flex; align-items: center; gap: 6px;
+      background: linear-gradient(135deg,#f97316,#ea580c); color: white;
+      border: none; padding: 8px 14px; border-radius: 20px; font-size: .82rem;
+      font-weight: 700; cursor: pointer; text-decoration: none;
+      font-family: inherit; transition: opacity .2s;
+    }
+    .sr-map-btn:hover { opacity: .88; }
+
     /* Responsive */
     @media (max-width: 420px) {
       #sr-chat-window { width: calc(100vw - 20px); right: 10px; bottom: 90px; }
@@ -481,6 +513,17 @@ document.addEventListener('DOMContentLoaded', function() {
       startComplaint();
       return;
     }
+    if (topicKey === 'ngoMap') {
+      // Try to extract city inline: "ngo in bhopal", "shelters near delhi"
+      const ngoInlineMatch = label.match(/(?:ngo|shelter|map)s?\s+(?:in|near|around|at)\s+(.+)/i)
+        || label.match(/(?:find|show)\s+(?:ngo|shelter)s?\s+(?:in|near)?\s*(.+)/i);
+      if (ngoInlineMatch && ngoInlineMatch[1].trim().length > 1) {
+        await fetchNGOsByCity(ngoInlineMatch[1].trim());
+      } else {
+        showNGOCityPrompt();
+      }
+      return;
+    }
 
     // Steps-based response
     const stepsHtml = topic.steps.map(s =>
@@ -618,6 +661,219 @@ document.addEventListener('DOMContentLoaded', function() {
     setTimeout(() => botReply(`Meanwhile, you can also reach us directly:<br>📞 <b>${CONTACT_INFO.helpline}</b> (Toll-Free)`), 1000);
   };
 
+  // ── NGO Lookup via Overpass API (OpenStreetMap) ──────────────────
+  async function fetchNGOsByCity(city) {
+    const typing = showTyping();
+    try {
+      // First geocode the city to get bounding box
+      const geoRes = await fetch(`https://nominatim.openstreetmap.org/search?q=${encodeURIComponent(city)}&format=json&limit=1`, {
+        headers: { 'Accept-Language': 'en', 'User-Agent': 'SafeReturnChatbot/1.0' }
+      });
+      const geoData = await geoRes.json();
+      if (!geoData || geoData.length === 0) {
+        removeTyping();
+        await botReply(`😕 Couldn't find the city <b>"${city}"</b>. Please try again with a correct city name.`);
+        return;
+      }
+
+      const { lat, lon } = geoData[0];
+      const radius = 15000; // 15 km radius
+
+      // Overpass query: fetch NGOs, social facilities, charities near city center
+      const query = `
+        [out:json][timeout:15];
+        (
+          node["amenity"="social_facility"](around:${radius},${lat},${lon});
+          node["office"="ngo"](around:${radius},${lat},${lon});
+          node["office"="charity"](around:${radius},${lat},${lon});
+          node["office"="association"](around:${radius},${lat},${lon});
+          node["amenity"="shelter"](around:${radius},${lat},${lon});
+        );
+        out body 10;
+      `;
+      const ovRes = await fetch('https://overpass-api.de/api/interpreter', {
+        method: 'POST',
+        body: 'data=' + encodeURIComponent(query)
+      });
+      const ovData = await ovRes.json();
+      removeTyping();
+
+      const elements = (ovData.elements || []).filter(e => e.tags && e.tags.name);
+
+      if (elements.length === 0) {
+        await botReply(`
+          <b>🗺️ NGOs near ${city}</b><br><br>
+          😕 No NGO/shelter data found for <b>${city}</b> on OpenStreetMap yet.<br><br>
+          Try searching on the <b>NGO Map</b> tab in the app — it uses additional sources. Or try a nearby larger city.
+        `);
+        return;
+      }
+
+      const cards = elements.slice(0, 6).map(e => {
+        const t = e.tags;
+        const name = t.name || 'NGO / Shelter';
+        const addrParts = [t['addr:street'], t['addr:city'] || city, t['addr:postcode']].filter(Boolean);
+        const addr = addrParts.length ? addrParts.join(', ') : city;
+        const mapsUrl = `https://www.google.com/maps?q=${e.lat},${e.lon}`;
+        return `
+          <div class="sr-ngo-card">
+            <div class="sr-ngo-card-name">🏠 ${name}</div>
+            <div class="sr-ngo-card-addr">📍 ${addr}</div>
+            <a class="sr-ngo-map-btn" href="${mapsUrl}" target="_blank" rel="noopener">🗺️ View on Google Maps</a>
+          </div>
+        `;
+      }).join('');
+
+      addMsg(`
+        <b>🗺️ NGOs & Shelters near ${city}</b>
+        <div class="sr-ngo-list">${cards}</div>
+        <br><small style="color:#64748b;">Showing up to 6 results from OpenStreetMap within 15 km.</small>
+      `, 'bot');
+
+    } catch (err) {
+      removeTyping();
+      await botReply(`⚠️ Couldn't fetch NGO data right now. Please check your connection or try again later.`);
+    }
+  }
+
+  function showNGOCityPrompt() {
+    addMsg(`
+      <b>🗺️ Find NGOs & Shelters Near You</b><br>
+      Please enter your <b>city name</b> to search for nearby NGOs and shelters:<br>
+      <div class="sr-city-input-wrap">
+        <input id="sr-ngo-city-input" placeholder="e.g. Bhopal, Jaipur, Delhi…" />
+        <button onclick="window._srSearchNGO()">Search 🔍</button>
+      </div>
+    `, 'bot');
+  }
+
+  window._srSearchNGO = async function () {
+    const cityInput = document.getElementById('sr-ngo-city-input');
+    const city = cityInput?.value.trim();
+    if (!city) { alert('Please enter a city name.'); return; }
+    addMsg(city, 'user');
+    await fetchNGOsByCity(city);
+  };
+
+  // ── Location Lookup via Nominatim ────────────────────────────────
+  function extractLocationQuery(text) {
+    const t = text.toLowerCase().trim();
+    // Patterns: "where is X", "location of X", "find X", "where can i find X", "where's X"
+    const patterns = [
+      /where(?:'s| is| can i find| do i find)\s+(.+)/i,
+      /location of\s+(.+)/i,
+      /find\s+(.+)/i,
+      /show me\s+(.+)/i,
+      /how to reach\s+(.+)/i,
+      /how to get to\s+(.+)/i,
+      /map of\s+(.+)/i,
+      /locate\s+(.+)/i,
+    ];
+    for (const p of patterns) {
+      const m = t.match(p);
+      if (m) {
+        // Strip trailing filler words
+        return m[1].replace(/\b(on map|on google maps|please|now|quickly)\b/gi, '').trim();
+      }
+    }
+    return null;
+  }
+
+  async function nominatimSearch(q) {
+    const res = await fetch(
+      `https://nominatim.openstreetmap.org/search?q=${encodeURIComponent(q)}&format=json&limit=3&addressdetails=1`,
+      { headers: { 'Accept-Language': 'en', 'User-Agent': 'SafeReturnChatbot/1.0' } }
+    );
+    return res.json();
+  }
+
+  function renderLocationCard(place, queryLabel) {
+    const lat  = parseFloat(place.lat).toFixed(4);
+    const lon  = parseFloat(place.lon).toFixed(4);
+    const displayName = place.display_name || queryLabel;
+    const shortName   = place.name || queryLabel;
+    const addr = place.address || {};
+    const parts = [
+      addr.road || addr.neighbourhood,
+      addr.village || addr.town || addr.city || addr.city_district || addr.suburb,
+      addr.county || addr.state_district,
+      addr.state,
+      addr.country
+    ].filter(Boolean);
+    const shortAddr = parts.join(', ') || displayName.split(',').slice(0,4).join(',');
+    const mapsUrl = `https://www.google.com/maps?q=${lat},${lon}`;
+
+    addMsg(`
+      <b>📍 ${shortName}</b>
+      <div class="sr-location-card">
+        <div class="sr-location-name">📍 ${shortName}</div>
+        <div class="sr-location-address">${shortAddr}</div>
+        <div class="sr-location-coords">Coordinates: ${lat}°N, ${lon}°E</div>
+        <a class="sr-map-btn" href="${mapsUrl}" target="_blank" rel="noopener">🗺️ Open in Google Maps</a>
+      </div>
+    `, 'bot');
+  }
+
+  async function handleLocationQuery(query) {
+    const typing = showTyping();
+    try {
+      // Strategy 1: Direct search
+      let data = await nominatimSearch(query);
+
+      // Strategy 2: Append "India" for better local results
+      if (!data || data.length === 0) {
+        data = await nominatimSearch(query + ', India');
+      }
+
+      // Strategy 3: Try Overpass name search (handles NGO/org names)
+      if (!data || data.length === 0) {
+        const ovQuery = `[out:json][timeout:10];(node["name"~"${query.replace(/"/g,'')}",i](area["ISO3166-1"="IN"]->.a;);way["name"~"${query.replace(/"/g,'')}",i](area["ISO3166-1"="IN"]->.a;););out body 1;`;
+        try {
+          const ovRes = await fetch('https://overpass-api.de/api/interpreter', {
+            method: 'POST', body: 'data=' + encodeURIComponent(ovQuery)
+          });
+          const ovData = await ovRes.json();
+          const el = (ovData.elements || []).find(e => e.lat || (e.center && e.center.lat));
+          if (el) {
+            const lat = el.lat || el.center.lat;
+            const lon = el.lon || el.center.lon;
+            // Reverse geocode for address
+            const revRes = await fetch(`https://nominatim.openstreetmap.org/reverse?lat=${lat}&lon=${lon}&format=json&addressdetails=1`, {
+              headers: { 'Accept-Language': 'en', 'User-Agent': 'SafeReturnChatbot/1.0' }
+            });
+            const revData = await revRes.json();
+            if (revData && revData.lat) {
+              removeTyping();
+              renderLocationCard({ ...revData, name: el.tags?.name || query }, query);
+              return;
+            }
+          }
+        } catch(_) {}
+      }
+
+      // Strategy 4: Google Maps search link fallback (always works)
+      removeTyping();
+      if (!data || data.length === 0) {
+        const googleUrl = `https://www.google.com/maps/search/${encodeURIComponent(query + ' India')}`;
+        addMsg(`
+          <b>📍 ${query}</b>
+          <div class="sr-location-card">
+            <div class="sr-location-name">📍 ${query}</div>
+            <div class="sr-location-address">Exact coordinates not found, but you can view it on Google Maps.</div>
+            <a class="sr-map-btn" href="${googleUrl}" target="_blank" rel="noopener">🔍 Search on Google Maps</a>
+          </div>
+        `, 'bot');
+        return;
+      }
+
+      renderLocationCard(data[0], query);
+
+    } catch (err) {
+      removeTyping();
+      await botReply(`⚠️ Sorry, I couldn't fetch the location right now. Please check your connection and try again.`);
+    }
+  }
+
   // ── NLP Matcher ───────────────────────────────────────────────────
   function matchTopic(text) {
     const t = text.toLowerCase().trim();
@@ -639,6 +895,13 @@ document.addEventListener('DOMContentLoaded', function() {
     input.value = '';
 
     addMsg(text, 'user');
+
+    // ── Location query check (before other topics) ────────────────
+    const locationQuery = extractLocationQuery(text);
+    if (locationQuery) {
+      await handleLocationQuery(locationQuery);
+      return;
+    }
 
     const topic = matchTopic(text);
 
@@ -665,7 +928,15 @@ document.addEventListener('DOMContentLoaded', function() {
       return;
     }
 
-    // Fallback
+    // ── Bare location fallback ────────────────────────────────────
+    // If input is short (1–4 words) and nothing matched, try treating it as a place name
+    const wordCount = text.trim().split(/\s+/).length;
+    if (wordCount <= 4) {
+      await handleLocationQuery(text.trim());
+      return;
+    }
+
+    // Final fallback
     await botReply(`I'm not sure I understood that. 🤔 Here are some things I can help with — just tap a button below, or try rephrasing your question!`);
   }
 

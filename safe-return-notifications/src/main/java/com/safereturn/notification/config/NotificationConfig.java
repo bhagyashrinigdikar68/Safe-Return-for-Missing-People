@@ -14,6 +14,7 @@ public class NotificationConfig {
     private EmailConfig email = new EmailConfig();
     private NtfyConfig ntfy = new NtfyConfig();
     private WhatsAppConfig whatsapp = new WhatsAppConfig();
+    private SmsConfig sms = new SmsConfig();
     private String flaskApiUrl = "http://localhost:5000";
 
     // ── Nested config classes ────────────────────────────────────────────────
@@ -80,6 +81,32 @@ public class NotificationConfig {
         public void setApiKey(String apiKey) { this.apiKey = apiKey; }
     }
 
+    // ── SMS (Twilio) config ───────────────────────────────────────────────────
+    public static class SmsConfig {
+        private boolean enabled    = false;
+        private String  accountSid = "";
+        private String  authToken  = "";
+        private String  fromNumber = "";   // your Twilio number, e.g. +12065550100
+        private String  toPhone    = "";   // fallback if no family_phone in request
+
+        public boolean isEnabled()              { return enabled; }
+        public void    setEnabled(boolean v)    { this.enabled = v; }
+
+        public String  getAccountSid()          { return accountSid; }
+        public void    setAccountSid(String v)  { this.accountSid = v; }
+
+        public String  getAuthToken()           { return authToken; }
+        public void    setAuthToken(String v)   { this.authToken = v; }
+
+        public String  getFromNumber()          { return fromNumber; }
+        public void    setFromNumber(String v)  { this.fromNumber = v; }
+
+        public String  getToPhone()             { return toPhone; }
+        public void    setToPhone(String v)     { this.toPhone = v; }
+    }
+
+    // ── Root fields ───────────────────────────────────────────────────────────
+
     // ── Root getters / setters ────────────────────────────────────────────────
 
     public double getConfidenceThreshold() { return confidenceThreshold; }
@@ -93,6 +120,9 @@ public class NotificationConfig {
 
     public WhatsAppConfig getWhatsapp() { return whatsapp; }
     public void setWhatsapp(WhatsAppConfig whatsapp) { this.whatsapp = whatsapp; }
+
+    public SmsConfig getSms() { return sms; }
+    public void setSms(SmsConfig sms) { this.sms = sms; }
 
     public String getFlaskApiUrl() { return flaskApiUrl; }
     public void setFlaskApiUrl(String flaskApiUrl) { this.flaskApiUrl = flaskApiUrl; }

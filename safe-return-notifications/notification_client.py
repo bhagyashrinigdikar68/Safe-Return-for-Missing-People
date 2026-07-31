@@ -88,9 +88,9 @@ def notify_if_match(
         }
 
         log.info(
-            "Sending notification for '%s' (%.1f%%) → family_email=%s",
+            "Sending notification for '%s' (%.1f%%) → family_phone=%s (SMS + WhatsApp)",
             payload["person_name"], confidence,
-            family_email or "(config fallback)"
+            family_phone or "(config fallback)"
         )
 
         response = requests.post(

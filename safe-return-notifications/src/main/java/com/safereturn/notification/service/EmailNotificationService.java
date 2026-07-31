@@ -2,6 +2,7 @@ package com.safereturn.notification.service;
 
 import com.safereturn.notification.config.NotificationConfig;
 import com.safereturn.notification.model.NotificationRequest;
+import jakarta.mail.internet.InternetAddress;
 import jakarta.mail.internet.MimeMessage;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -74,18 +75,27 @@ public class EmailNotificationService {
 
         // ── Send ─────────────────────────────────────────────────────────────
         try {
-            MimeMessage    msg    = mailSender.createMimeMessage();
+            MimeMessage       msg    = mailSender.createMimeMessage();
+            // FIX: MimeMessageHelper(msg, true, "UTF-8") — multipart must be true for HTML
             MimeMessageHelper helper = new MimeMessageHelper(msg, true, "UTF-8");
 
-            helper.setFrom(config.getEmail().getFrom(), config.getEmail().getFromName());
+            // FIX: setFrom(String, String) throws UnsupportedEncodingException.
+            //      Use InternetAddress to safely encode the display name.
+            helper.setFrom(new InternetAddress(
+                    config.getEmail().getFrom(),
+                    config.getEmail().getFromName(),
+                    "UTF-8"
+            ));
             helper.setTo(recipients.toArray(new String[0]));
             helper.setSubject(buildSubject(req));
+            // FIX: second arg must be true to send as HTML, not plain text
             helper.setText(buildHtmlBody(req), true);
 
             mailSender.send(msg);
 
-            log.info("Email sent to {} for match: {} ({:.1f}%)",
-                     recipients, req.getPersonName(), req.getConfidence());
+            log.info("Email sent to {} for match: {} ({}%)",
+                     recipients, req.getPersonName(),
+                     String.format("%.1f", req.getConfidence()));
             return "EMAIL_OK → " + recipients;
 
         } catch (Exception e) {
@@ -115,20 +125,32 @@ public class EmailNotificationService {
                 ? req.getTimestamp()
                 : LocalDateTime.now().format(DateTimeFormatter.ofPattern("dd MMM yyyy, HH:mm:ss"));
 
-        // Personalised greeting
         String greeting = (req.getReporterName() != null && !req.getReporterName().isBlank())
                 ? "Dear " + req.getReporterName() + ","
                 : "Dear Family,";
 
-        // Which person are we referring to in body text
         String missingName = (req.getMissingPersonName() != null && !req.getMissingPersonName().isBlank())
                 ? req.getMissingPersonName()
                 : "your missing family member";
 
+        // FIX: Build confidenceBar BEFORE the template so the width value is
+        //      embedded as a plain string — avoids a rogue '%' inside formatted()
+        //      which would cause MissingFormatArgumentException and silently
+        //      swallow the email send (caught as "Email send failed").
+        String barWidth      = String.valueOf((int) Math.min(100, req.getConfidence()));
         String confidenceBar = "<div style='background:#e5e7eb;border-radius:99px;height:12px;margin-top:6px;'>"
                 + "<div style='background:#16a34a;border-radius:99px;height:12px;width:"
-                + Math.min(100, req.getConfidence()) + "%;'></div></div>";
+                + barWidth + "%;'></div></div>";
 
+        // FIX: Pre-format all double values as strings so there are no
+        //      floating-point format specifiers (%.1f, %.4f) inside the text block.
+        //      Text block + .formatted() only works reliably with %s specifiers.
+        String confidenceFmt = String.format("%.1f", req.getConfidence());
+        String distanceFmt   = String.format("%.4f", req.getDistance());
+        String thresholdFmt  = String.format("%.4f", req.getThreshold());
+        String location      = req.getLocation() != null ? req.getLocation() : "Unknown";
+
+        // Count of %s markers below must match the .formatted() arg list exactly: 11 args
         return """
                 <!DOCTYPE html>
                 <html>
@@ -139,9 +161,9 @@ public class EmailNotificationService {
                   .header{text-align:center;border-bottom:2px solid #f3f4f6;padding-bottom:20px;margin-bottom:24px;}
                   .logo{font-size:28px;font-weight:900;color:#f97316;margin-bottom:4px;}
                   .sub{color:#6b7280;font-size:13px;}
-                  table{width:100%%;border-collapse:collapse;margin-top:20px;}
+                  table{width:100%;border-collapse:collapse;margin-top:20px;}
                   td{padding:11px 14px;border-bottom:1px solid #f3f4f6;font-size:14px;}
-                  td:first-child{color:#6b7280;width:38%%;font-weight:600;}
+                  td:first-child{color:#6b7280;width:38%;font-weight:600;}
                   td:last-child{color:#111827;font-weight:500;}
                   .footer{text-align:center;font-size:12px;color:#9ca3af;margin-top:28px;padding-top:20px;border-top:1px solid #f3f4f6;}
                   .action-btn{display:inline-block;margin-top:20px;padding:12px 28px;background:#f97316;color:white;border-radius:8px;text-decoration:none;font-weight:bold;font-size:15px;}
@@ -150,34 +172,29 @@ public class EmailNotificationService {
                 <body>
                   <div class="card">
                     <div class="header">
-                      <div class="logo">❤️ Safe Return</div>
+                      <div class="logo">&#10084;&#65039; Safe Return</div>
                       <div class="sub">Automated Face Recognition Alert</div>
                     </div>
-
                     <p style="font-size:15px;color:#374151;margin:0 0 16px;">%s</p>
                     <p style="font-size:14px;color:#374151;">
                       We have found a possible match for <strong>%s</strong>
                       in our shelter database. Please review the details below.
                     </p>
-
                     <div style="text-align:center;margin:20px 0;">%s</div>
-
                     <table>
                       <tr><td>Matched Inmate Name</td><td><strong>%s</strong></td></tr>
                       <tr><td>Inmate ID</td><td>%s</td></tr>
                       <tr><td>Confidence</td>
-                          <td><strong>%.1f%%</strong>%s</td></tr>
-                      <tr><td>Distance Score</td><td>%.4f (threshold: %.4f)</td></tr>
+                          <td><strong>%s%%</strong>%s</td></tr>
+                      <tr><td>Distance Score</td><td>%s (threshold: %s)</td></tr>
                       <tr><td>Camera / Location</td><td>%s</td></tr>
                       <tr><td>Detected At</td><td>%s</td></tr>
                     </table>
-
                     <div style="text-align:center;">
                       <a href="http://localhost:3000/dashboard" class="action-btn">
-                        View on Safe Return Dashboard →
+                        View on Safe Return Dashboard &#8594;
                       </a>
                     </div>
-
                     <div class="footer">
                       Safe Return System &bull; This is an automated alert &bull; Do not reply
                     </div>
@@ -185,17 +202,17 @@ public class EmailNotificationService {
                 </body>
                 </html>
                 """.formatted(
-                greeting,
-                missingName,
-                matchBadge,
-                req.getPersonName(),
-                req.getPersonId(),
-                req.getConfidence(),
-                confidenceBar,
-                req.getDistance(),
-                req.getThreshold(),
-                req.getLocation() != null ? req.getLocation() : "Unknown",
-                timestamp
+                greeting,        // 1 - %s greeting
+                missingName,     // 2 - %s missing person name in intro
+                matchBadge,      // 3 - %s match badge HTML
+                req.getPersonName(),  // 4 - %s matched inmate name
+                req.getPersonId(),    // 5 - %s inmate ID
+                confidenceFmt,        // 6 - %s confidence value
+                confidenceBar,        // 7 - %s confidence bar HTML
+                distanceFmt,          // 8 - %s distance
+                thresholdFmt,         // 9 - %s threshold
+                location,             // 10 - %s location
+                timestamp             // 11 - %s timestamp
         );
     }
 }

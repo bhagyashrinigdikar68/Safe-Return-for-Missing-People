@@ -24,6 +24,32 @@ document.addEventListener('DOMContentLoaded', function () {
     var foundCard = document.getElementById('card-found-person');
     if (lostCard)  lostCard.onclick  = showReportForm;
     if (foundCard) foundCard.onclick = showFoundReportForm;
+
+    // ── Scroll-reveal observer ──
+    var revealEls = document.querySelectorAll('.reveal');
+    if ('IntersectionObserver' in window) {
+        var observer = new IntersectionObserver(function(entries) {
+            entries.forEach(function(entry) {
+                if (entry.isIntersecting) {
+                    entry.target.classList.add('visible');
+                    observer.unobserve(entry.target);
+                }
+            });
+        }, { threshold: 0.12 });
+        revealEls.forEach(function(el) { observer.observe(el); });
+    } else {
+        revealEls.forEach(function(el) { el.classList.add('visible'); });
+    }
+
+    // ── Bell shake on new notification ──
+    var bell = document.querySelector('.notification-bell');
+    if (bell) {
+        bell.addEventListener('click', function() {
+            this.classList.remove('bell-animate');
+            void this.offsetWidth; // reflow
+            this.classList.add('bell-animate');
+        });
+    }
 });
 
 // ════════════════════════════════════════════════════
@@ -367,6 +393,30 @@ function _sendToRecognize(dataURL) {
                 body: JSON.stringify(notifPayload)
             }).catch(function(){});
 
+            // Email the family via app.py /send-match-alert (Gmail SMTP, free)
+            if (r && r.id) {
+                fetch(FLASK_BASE + '/send-match-alert', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        report_id:   String(r.id),
+                        person_name: data.person_name || 'Unknown',
+                        person_id:   data.person_id   || '',
+                        confidence:  data.confidence  || 0,
+                        location:    data.location    || 'Unknown Location'
+                    })
+                })
+                .then(function(res){ return res.json(); })
+                .then(function(d){
+                    if (d.message) {
+                        showToast('Email Sent', 'Family notified by email', 'success');
+                    } else {
+                        console.warn('[Match email failed]', d.error);
+                    }
+                })
+                .catch(function(e){ console.warn('[Match email error]', e.message); });
+            }
+
             // ── Auto-show Aadhaar popup if available ──
             if (hasAadhaar) {
                 setTimeout(function(){ showAadhaarMatchPopup(); }, 500);
@@ -519,28 +569,56 @@ function closeRecogModal() {
 // ════════════════════════════════════════════════════
 var currentUserEmail = '';
 
-function openLogin()  { loginModal.style.display = 'flex'; }
-function closeLogin() { loginModal.style.display = 'none'; }
+// ── Auth API base ─────────────────────────────────────────────────
+var AUTH_API = 'http://localhost:5002';
+var authTimerInterval;
+var suMode = 'phone';
+var suVerifiedContact = '';
 
-function handleLogin() {
-    var email = document.getElementById('emailInput').value;
-    var pass  = document.getElementById('passInput').value;
-    var role  = document.getElementById('roleInput').value;
-    if (email !== '' && pass !== '') {
-        landingPage.style.display  = 'none';
-        loginModal.style.display   = 'none';
-        currentUserRole  = role;
-        currentUserEmail = email.toLowerCase().trim();
-        var displayName  = email.split('@')[0];
-        document.querySelectorAll('.displayUserName').forEach(function(el){ el.textContent = displayName; });
-        document.querySelectorAll('.displayUserRole').forEach(function(el){
-            el.textContent = role === 'Admin' ? 'Administrator' : role === 'Volunteer' ? 'Volunteer' : 'Citizen User';
-        });
-        showDashboard();
-        window.scrollTo(0, 0);
-    } else {
-        alert('Please enter credentials');
+// ── Modal open/close ──────────────────────────────────────────────
+function openLogin() {
+    loginModal.style.display = 'flex';
+    loginModal.style.alignItems = 'center';
+    loginModal.style.justifyContent = 'center';
+    document.querySelectorAll('.auth-card .screen').forEach(function(s){ s.classList.remove('active'); });
+    var home = document.getElementById('s-home');
+    if (home) home.classList.add('active');
+    switchTab('login');
+}
+function closeLogin() { loginModal.style.display = 'none'; }
+function handleModalBackdropClick(e) { if (e.target === loginModal) closeLogin(); }
+function handleLogin() { openLogin(); } // kept for backward compat
+
+// ── After successful login ────────────────────────────────────────
+function onAuthSuccess(name, role) {
+    var normalizedRole = (role === 'admin' || role === 'Admin') ? 'Admin' : 'Public';
+    currentUserRole  = normalizedRole;
+    currentUserEmail = name;
+
+    // Extract a display-friendly first name
+    var displayName = name || (normalizedRole === 'Admin' ? 'Admin' : 'User');
+    // If it looks like an email, use the part before @
+    if (displayName.includes('@')) {
+        displayName = displayName.split('@')[0];
     }
+    // Capitalise first letter
+    displayName = displayName.charAt(0).toUpperCase() + displayName.slice(1);
+
+    // Update all name/role placeholders
+    document.querySelectorAll('.displayUserName').forEach(function(el){ el.textContent = displayName; });
+    document.querySelectorAll('.displayUserRole').forEach(function(el){
+        el.textContent = normalizedRole === 'Admin' ? 'Administrator' : 'Citizen User';
+    });
+
+    // Update all dashboard welcome headings
+    document.querySelectorAll('.dash-welcome').forEach(function(el) {
+        el.textContent = 'Welcome, ' + displayName + ' 👋';
+    });
+
+    landingPage.style.display = 'none';
+    loginModal.style.display  = 'none';
+    showDashboard();
+    window.scrollTo(0, 0);
 }
 
 function logout() {
@@ -552,7 +630,280 @@ function logout() {
     window.scrollTo(0, 0);
 }
 
-window.onclick = function(event){ if (event.target === loginModal) closeLogin(); };
+// ── Auth screen navigation ────────────────────────────────────────
+function goto(id) {
+    document.querySelectorAll('.auth-card .screen').forEach(function(s){ s.classList.remove('active'); });
+    var el = document.getElementById(id);
+    if (el) el.classList.add('active');
+}
+function switchTab(tab) {
+    var tl = document.getElementById('tab-login');
+    var ts = document.getElementById('tab-signup');
+    var lr = document.getElementById('login-roles');
+    var sr = document.getElementById('signup-roles');
+    if (tl) tl.classList.toggle('active', tab === 'login');
+    if (ts) ts.classList.toggle('active', tab === 'signup');
+    if (lr) lr.style.display = tab === 'login'  ? 'block' : 'none';
+    if (sr) sr.style.display = tab === 'signup' ? 'block' : 'none';
+}
+function togglePw(id, btn) {
+    var i = document.getElementById(id);
+    i.type = i.type === 'password' ? 'text' : 'password';
+    btn.textContent = i.type === 'password' ? '👁' : '🙈';
+}
+function switchContact(m) {
+    suMode = m;
+    document.getElementById('pill-phone').classList.toggle('active', m === 'phone');
+    document.getElementById('pill-email').classList.toggle('active', m === 'email');
+    document.getElementById('su-phone-wrap').style.display = m === 'phone' ? 'block' : 'none';
+    document.getElementById('su-email-wrap').style.display = m === 'email' ? 'block' : 'none';
+}
+function setAuthMsg(id, text, type) {
+    var el = document.getElementById(id); if (!el) return;
+    el.textContent = text; el.className = 'auth-msg ' + (type || '');
+}
+function setAuthBtn(btnId, spinId, lblId, loading) {
+    document.getElementById(btnId).disabled = loading;
+    document.getElementById(spinId).style.display = loading ? 'block' : 'none';
+    document.getElementById(lblId).style.display  = loading ? 'none'  : 'inline';
+}
+function fmtPhone(p) {
+    var c = p.replace(/[\s\-()]/g, '');
+    if (c.startsWith('+')) return c;
+    if (c.startsWith('91') && c.length === 12) return '+' + c;
+    if (c.length === 10) return '+91' + c;
+    return '+' + c;
+}
+async function authApiFetch(path, body) {
+    var r = await fetch(AUTH_API + path, { method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify(body) });
+    var data = await r.json();
+    return { ok: r.ok, data: data };
+}
+
+// ── OTP helpers ───────────────────────────────────────────────────
+function initOTP(grpId) {
+    var inputs = document.querySelectorAll('#' + grpId + ' input');
+    inputs.forEach(function(inp, i) {
+        inp.value = '';
+        inp.oninput = function() { if (inp.value.length === 1 && i < inputs.length - 1) inputs[i+1].focus(); };
+        inp.onkeydown = function(e) { if (e.key === 'Backspace' && !inp.value && i > 0) inputs[i-1].focus(); };
+    });
+    inputs[0].focus();
+}
+function getOTP(grpId) {
+    return Array.from(document.querySelectorAll('#' + grpId + ' input')).map(function(i){ return i.value; }).join('');
+}
+function clearOTP(grpId) {
+    document.querySelectorAll('#' + grpId + ' input').forEach(function(i){ i.value = ''; i.style.borderColor = ''; });
+}
+function startTimer(cdId, wrapId, resendId) {
+    var s = 30;
+    clearInterval(authTimerInterval);
+    document.getElementById(wrapId).style.display   = 'block';
+    document.getElementById(resendId).style.display = 'none';
+    document.getElementById(cdId).textContent = s;
+    authTimerInterval = setInterval(function() {
+        s--;
+        document.getElementById(cdId).textContent = s;
+        if (s <= 0) {
+            clearInterval(authTimerInterval);
+            document.getElementById(wrapId).style.display   = 'none';
+            document.getElementById(resendId).style.display = 'block';
+        }
+    }, 1000);
+}
+function authShowSuccess(icon, title, sub) {
+    document.getElementById('ok-icon').textContent  = icon;
+    document.getElementById('ok-title').textContent = title;
+    document.getElementById('ok-sub').textContent   = sub;
+    goto('s-ok');
+}
+
+// ── Login User ────────────────────────────────────────────────────
+async function authLoginUser() {
+    var contact = document.getElementById('lu-contact').value.trim();
+    var password = document.getElementById('lu-pw').value;
+    if (!contact || !password) return setAuthMsg('lu-msg','Please fill in all fields.','err');
+    setAuthBtn('lu-btn','lu-spin','lu-lbl', true);
+    try {
+        var res = await authApiFetch('/login/user', { contact:contact, password:password });
+        if (res.ok) {
+            setAuthMsg('lu-msg','✓ Login successful!','ok');
+            setTimeout(function(){ onAuthSuccess(res.data.name || contact, 'user'); }, 900);
+        } else { setAuthMsg('lu-msg', res.data.message || 'Login failed.', 'err'); }
+    } catch(e) { setAuthMsg('lu-msg','Cannot reach server. Is app.py running on port 5001?','err'); }
+    setAuthBtn('lu-btn','lu-spin','lu-lbl', false);
+}
+
+// ── Login Admin ───────────────────────────────────────────────────
+async function authLoginAdmin() {
+    var email = document.getElementById('la-email').value.trim();
+    var password = document.getElementById('la-pw').value;
+    if (!email || !password) return setAuthMsg('la-msg','Please fill in all fields.','err');
+    setAuthBtn('la-btn','la-spin','la-lbl', true);
+    try {
+        var res = await authApiFetch('/login/admin', { email:email, password:password });
+        if (res.ok) {
+            setAuthMsg('la-msg','✓ Admin login successful!','ok');
+            setTimeout(function(){ onAuthSuccess(res.data.name || email, 'admin'); }, 900);
+        } else { setAuthMsg('la-msg', res.data.message || 'Login failed.', 'err'); }
+    } catch(e) { setAuthMsg('la-msg','Cannot reach server. Is app.py running on port 5001?','err'); }
+    setAuthBtn('la-btn','la-spin','la-lbl', false);
+}
+
+// ── Send OTP ──────────────────────────────────────────────────────
+async function sendUserOTP() {
+    var name = document.getElementById('su-name').value.trim();
+    if (!name) return setAuthMsg('su-msg','Please enter your name.','err');
+    var contact;
+    if (suMode === 'phone') {
+        var raw = document.getElementById('su-phone').value.trim();
+        if (!raw || raw.replace(/\D/g,'').length < 10) return setAuthMsg('su-msg','Enter a valid 10-digit phone number.','err');
+        contact = fmtPhone(raw);
+    } else {
+        contact = document.getElementById('su-email').value.trim();
+        if (!contact || !contact.includes('@')) return setAuthMsg('su-msg','Enter a valid email address.','err');
+    }
+    setAuthBtn('su-otp-btn','su-otp-spin','su-otp-lbl', true);
+    try {
+        var payload = suMode === 'phone' ? { phone:contact } : { email:contact };
+        var res = await authApiFetch('/send-otp', payload);
+        if (res.ok) {
+            suVerifiedContact = contact;
+            document.getElementById('su-otp-sub').textContent = 'OTP sent to ' + contact;
+            goto('s-su-user-otp'); initOTP('su-otp-grp'); startTimer('su-cd','su-timer','su-resend');
+        } else { setAuthMsg('su-msg', res.data.message || 'Failed to send OTP.', 'err'); }
+    } catch(e) { setAuthMsg('su-msg','Cannot reach server. Is app.py running on port 5001?','err'); }
+    setAuthBtn('su-otp-btn','su-otp-spin','su-otp-lbl', false);
+}
+
+// ── Verify OTP ────────────────────────────────────────────────────
+async function verifyUserOTP() {
+    var otp = getOTP('su-otp-grp');
+    if (otp.length < 6) return setAuthMsg('su-ver-msg','Enter all 6 digits.','err');
+    setAuthBtn('su-ver-btn','su-ver-spin','su-ver-lbl', true);
+    try {
+        var payload = suMode === 'phone' ? { phone:suVerifiedContact, otp:otp } : { email:suVerifiedContact, otp:otp };
+        var res = await authApiFetch('/verify-otp', payload);
+        if (res.ok) { clearInterval(authTimerInterval); goto('s-su-user-pw'); }
+        else {
+            setAuthMsg('su-ver-msg', res.data.message || 'Invalid OTP.', 'err');
+            clearOTP('su-otp-grp');
+            document.querySelectorAll('#su-otp-grp input').forEach(function(i){ i.style.borderColor='#ff4d6d'; });
+            setTimeout(function(){ document.querySelectorAll('#su-otp-grp input').forEach(function(i){ i.style.borderColor=''; }); }, 700);
+            document.querySelector('#su-otp-grp input').focus();
+        }
+    } catch(e) { setAuthMsg('su-ver-msg','Cannot reach server.','err'); }
+    setAuthBtn('su-ver-btn','su-ver-spin','su-ver-lbl', false);
+}
+async function resendUserOTP() {
+    document.getElementById('su-resend').style.display = 'none';
+    clearOTP('su-otp-grp');
+    var payload = suMode === 'phone' ? { phone:suVerifiedContact } : { email:suVerifiedContact };
+    await authApiFetch('/send-otp', payload);
+    startTimer('su-cd','su-timer','su-resend');
+}
+
+// ── Complete User Signup ──────────────────────────────────────────
+async function completeUserSignup() {
+    var pw1 = document.getElementById('su-pw1').value;
+    var pw2 = document.getElementById('su-pw2').value;
+    if (!pw1) return setAuthMsg('su-pw-msg','Please set a password.','err');
+    if (pw1 !== pw2) return setAuthMsg('su-pw-msg','Passwords do not match.','err');
+    if (pw1.length < 6) return setAuthMsg('su-pw-msg','Minimum 6 characters.','err');
+    var name = document.getElementById('su-name').value.trim();
+    setAuthBtn('su-pw-btn','su-pw-spin','su-pw-lbl', true);
+    try {
+        var res = await authApiFetch('/signup/user', { name:name, contact:suVerifiedContact, password:pw1 });
+        if (res.ok) { authShowSuccess('🎉','Welcome!','Account created. You can now log in.'); }
+        else { setAuthMsg('su-pw-msg', res.data.message || 'Signup failed.', 'err'); }
+    } catch(e) { setAuthMsg('su-pw-msg','Cannot reach server.','err'); }
+    setAuthBtn('su-pw-btn','su-pw-spin','su-pw-lbl', false);
+}
+
+// // ── Admin Signup ──────────────────────────────────────────────────
+// async function signupAdmin() {
+//     var adminName=document.getElementById('sa-name').value.trim();
+//     var adminEmail=document.getElementById('sa-email').value.trim();
+//     var orgReg=document.getElementById('sa-org-reg').value.trim();
+//     var orgPw=document.getElementById('sa-org-pw').value;
+//     var personalPw=document.getElementById('sa-pw').value;
+//     if (!adminName||!adminEmail||!orgReg||!orgPw||!personalPw) return setAuthMsg('sa-msg','Please fill in all fields.','err');
+//     setAuthBtn('sa-btn','sa-spin','sa-lbl', true);
+//     try {
+//         var res = await authApiFetch('/signup/admin', { adminName:adminName, adminEmail:adminEmail, orgRegistrationNumber:orgReg, orgPassword:orgPw, personalPassword:personalPw });
+//         if (res.ok) { authShowSuccess('🛡️','Admin Registered!','Your admin account has been created.'); }
+//         else { setAuthMsg('sa-msg', res.data.message || 'Registration failed.', 'err'); }
+//     } catch(e) { setAuthMsg('sa-msg','Cannot reach server.','err'); }
+//     setAuthBtn('sa-btn','sa-spin','sa-lbl', false);
+// }
+
+// ── Admin Send OTP ────────────────────────────────────────────────
+async function sendAdminOtp() {
+    var adminEmail = document.getElementById('sa-email').value.trim();
+    if (!adminEmail) return setAuthMsg('sa-msg', 'Please enter admin email first.', 'err');
+    document.getElementById('sa-otp-btn').disabled = true;
+    document.getElementById('sa-otp-btn').textContent = 'Sending...';
+    try {
+        var res = await authApiFetch('/send-otp', { email: adminEmail });
+        if (res.ok) { setAuthMsg('sa-msg', 'OTP sent to your email!', 'ok'); }
+        else { setAuthMsg('sa-msg', res.data.message || 'Failed to send OTP.', 'err'); }
+    } catch(e) { setAuthMsg('sa-msg', 'Cannot reach server.', 'err'); }
+    document.getElementById('sa-otp-btn').disabled = false;
+    document.getElementById('sa-otp-btn').textContent = 'Send OTP to Email';
+}
+
+// ── Admin Signup ──────────────────────────────────────────────────
+async function signupAdmin() {
+    var adminName  = document.getElementById('sa-name').value.trim();
+    var adminEmail = document.getElementById('sa-email').value.trim();
+    var orgReg     = document.getElementById('sa-org-reg').value.trim();
+    var orgPw      = document.getElementById('sa-org-pw').value;
+    var personalPw = document.getElementById('sa-pw').value;
+    var otp        = document.getElementById('sa-otp').value.trim();   // ← new
+    if (!adminName||!adminEmail||!orgReg||!orgPw||!personalPw) return setAuthMsg('sa-msg','Please fill in all fields.','err');
+    if (!otp) return setAuthMsg('sa-msg','Please enter the OTP sent to your email.','err');  // ← new
+    setAuthBtn('sa-btn','sa-spin','sa-lbl', true);
+    try {
+        var res = await authApiFetch('/signup/admin', { adminName:adminName, adminEmail:adminEmail, orgRegistrationNumber:orgReg, orgPassword:orgPw, personalPassword:personalPw, otp:otp });  // ← otp added
+        if (res.ok) { authShowSuccess('🛡️','Admin Registered!','Your admin account has been created.'); }
+        else { setAuthMsg('sa-msg', res.data.message || 'Registration failed.', 'err'); }
+    } catch(e) { setAuthMsg('sa-msg','Cannot reach server.','err'); }
+    setAuthBtn('sa-btn','sa-spin','sa-lbl', false);
+}
+
+// ── Org Signup ────────────────────────────────────────────────────
+async function signupOrg() {
+    var orgName=document.getElementById('so-name').value.trim();
+    var orgAddr=document.getElementById('so-addr').value.trim();
+    var govtReg=document.getElementById('so-reg').value.trim();
+    var pw1=document.getElementById('so-pw1').value;
+    var pw2=document.getElementById('so-pw2').value;
+    if (!orgName||!orgAddr||!govtReg||!pw1||!pw2) return setAuthMsg('so-msg','Please fill in all fields.','err');
+    if (pw1!==pw2) return setAuthMsg('so-msg','Passwords do not match.','err');
+    setAuthBtn('so-btn','so-spin','so-lbl', true);
+    try {
+        var res = await authApiFetch('/signup/organisation', { orgName:orgName, orgAddress:orgAddr, govtRegistrationNumber:govtReg, password:pw1, confirmPassword:pw2 });
+        if (res.ok) { authShowSuccess('🏢','Organisation Registered!','Your organisation is now on the platform.'); }
+        else { setAuthMsg('so-msg', res.data.message || 'Registration failed.', 'err'); }
+    } catch(e) { setAuthMsg('so-msg','Cannot reach server.','err'); }
+    setAuthBtn('so-btn','so-spin','so-lbl', false);
+}
+
+// ── Enter key support ─────────────────────────────────────────────
+document.addEventListener('keydown', function(e) {
+    if (e.key !== 'Enter') return;
+    var active = document.querySelector('.auth-card .screen.active');
+    if (!active) return;
+    var id = active.id;
+    if      (id==='s-login-user')  authLoginUser();
+    else if (id==='s-login-admin') authLoginAdmin();
+    else if (id==='s-su-user')     sendUserOTP();
+    else if (id==='s-su-user-otp') verifyUserOTP();
+    else if (id==='s-su-user-pw')  completeUserSignup();
+    else if (id==='s-su-admin')    signupAdmin();
+    else if (id==='s-su-org')      signupOrg();
+});
 
 // ════════════════════════════════════════════════════
 // NAVIGATION
@@ -593,6 +944,7 @@ function showFoundReportForm() {
 // ════════════════════════════════════════════════════
 // FORM SUBMISSION — PUBLIC: Report Lost Person
 // ════════════════════════════════════════════════════
+
 function submitPublicLostReport() {
     var fullName     = (document.getElementById('public-fullName')    || {}).value || '';
     var age          = (document.getElementById('public-age')         || {}).value || '';
@@ -605,6 +957,7 @@ function submitPublicLostReport() {
     var medical      = (document.getElementById('medical_condition')  || {}).value || '';
     var familyName   = (document.getElementById('public-familyName')  || {}).value || '';
     var familyPhone  = (document.getElementById('public-familyPhone') || {}).value || '';
+    var altPhoneRaw = (document.getElementById('public-familyPhone2') || {}).value || '';
     var familyEmail  = (document.getElementById('public-familyEmail') || {}).value || '';
     var famAadhaar   = (document.getElementById('public-familyAadhaar')|| {}).value || '';
     var perAadhaar   = (document.getElementById('public-personAadhaar')|| {}).value || '';
@@ -640,6 +993,14 @@ function submitPublicLostReport() {
         return;
     }
 
+    var altDigits   = altPhoneRaw.replace(/\D/g, '');
+
+// ── Validate it (add this in your validation block) ──
+if (altDigits && !/^[6-9]\d{9}$/.test(altDigits)) {
+    alert('Alternate phone is invalid. Must be 10 digits starting with 6-9.');
+    return;
+}
+
     // ── Build FormData ──
     var btn = document.getElementById('public-submit-btn');
     if (btn) { btn.disabled = true; btn.textContent = 'Submitting…'; }
@@ -656,9 +1017,10 @@ function submitPublicLostReport() {
     formData.append('medical_condition',    medical);
     formData.append('public-familyName',  familyName);
     formData.append('public-familyPhone', phoneDigits);
-    formData.append('contact_email',      familyEmail);
-    formData.append('family_aadhaar',     famAadhaar);
-    formData.append('person_aadhaar',     perAadhaar);
+    formData.append('public-familyPhone2', altDigits);
+    formData.append('public-familyEmail',      familyEmail);
+    formData.append('public-familyAadhaar',     famAadhaar);
+    formData.append('public-personAadhaar',     perAadhaar);
 
     // ── Attach photo if selected ──
     var photoInput = document.getElementById('publicPhotoInput');
@@ -679,7 +1041,7 @@ function submitPublicLostReport() {
             showToast('Report Submitted', '✅ Lost person report submitted successfully!', 'success');
             showDashboard();
         }
-
+        
         // ── Add a local notification ──
         addUserNotification({
             type: 'update',
@@ -694,6 +1056,7 @@ function submitPublicLostReport() {
         alert('Network error: ' + err.message + '\nMake sure the server is running.');
     });
 }
+
 
 // ── Shown to public user after successful submit with Aadhaar ──
 function _showAadhaarSubmitConfirmation(personName, famAadhaar, perAadhaar, familyName, phone) {
@@ -1020,18 +1383,29 @@ var _localNotifStore = {};
 function _getUserNotifKey() { return currentUserEmail || 'guest'; }
 
 function loadNotifications() {
-    fetch(FLASK_BASE + '/get-notifications?user=' + encodeURIComponent(_getUserNotifKey()))
+    var key = _getUserNotifKey();
+    fetch(FLASK_BASE + '/get-notifications?user=' + encodeURIComponent(key))
     .then(function(res){ return res.json(); })
     .then(function(data){
         notifications = data
-            .filter(function(n){ return !n.user_email || n.user_email === _getUserNotifKey() || currentUserRole === 'Admin'; })
+            .filter(function(n){
+                if (currentUserRole === 'Admin') {
+                    // Admins only see notifications explicitly for them
+                    return n.user_email === key;
+                }
+                // Users: must match their own email exactly — no wildcards
+                return n.user_email === key;
+            })
             .map(function(n){
                 return { id:n._id, type:n.type||'match', title:n.title||'Match Found', message:n.message||'', time:n.time||'Just now', read:n.read||false, reportName:n.report_name||'', phone:n.phone||'', userEmail:n.user_email||'' };
             });
         renderNotifications(); updateNotificationBadge();
     })
     .catch(function(){
-        notifications = (_localNotifStore[_getUserNotifKey()] || []);
+        // Fallback: only show locally stored notifications for THIS user
+        notifications = (_localNotifStore[key] || []).filter(function(n){
+            return n.userEmail === key;
+        });
         renderNotifications(); updateNotificationBadge();
     });
 }
@@ -1059,8 +1433,10 @@ function renderNotifications(filter) {
     var list = document.getElementById('notificationsList');
     if (!list) return;
     list.innerHTML = '';
+    var key = _getUserNotifKey();
     var userNotifs = notifications.filter(function(n){
-        return !n.userEmail || n.userEmail === _getUserNotifKey() || currentUserRole === 'Admin';
+        // Always strictly match by userEmail — no cross-user leakage
+        return n.userEmail === key;
     });
     var filtered = filter === 'all' ? userNotifs : userNotifs.filter(function(n){ return n.type === filter; });
     if (!filtered.length) {
@@ -1162,8 +1538,9 @@ function dismissNotification(id) {
 }
 
 function updateNotificationBadge() {
+    var key = _getUserNotifKey();
     var unread = notifications.filter(function(n){
-        return !n.read && (!n.userEmail || n.userEmail === _getUserNotifKey() || currentUserRole === 'Admin');
+        return !n.read && n.userEmail === key;
     }).length;
     document.querySelectorAll('.notif-badge').forEach(function(b){
         b.textContent    = unread > 0 ? unread : '0';

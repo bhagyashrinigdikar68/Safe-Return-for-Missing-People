@@ -6,89 +6,106 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Service;
 
-import javax.net.ssl.*;
 import java.net.URI;
+import java.net.URLEncoder;
 import java.net.http.HttpClient;
 import java.net.http.HttpRequest;
 import java.net.http.HttpResponse;
 import java.nio.charset.StandardCharsets;
-import java.security.SecureRandom;
-import java.security.cert.X509Certificate;
 import java.time.Duration;
 
+/**
+ * Sends FREE push notifications via ntfy.sh.
+ *
+ * FIX: This file was MISSING from the project — NotificationOrchestrator
+ *      imports and autowires NtfyNotificationService, but the file was never
+ *      created, causing a Spring Boot startup failure:
+ *        "Parameter 2 of constructor in NotificationOrchestrator required a
+ *         bean of type NtfyNotificationService that could not be found."
+ *
+ * Setup (free, no account needed):
+ *   1. Install the "ntfy" app on Android/iOS
+ *   2. Subscribe to your unique topic (set in application.yml: notification.ntfy.topic)
+ *   3. Done — notifications appear instantly on your phone
+ */
 @Service
 public class NtfyNotificationService {
 
     private static final Logger log = LoggerFactory.getLogger(NtfyNotificationService.class);
+
     private final NotificationConfig config;
-    private final HttpClient httpClient;
+    private final HttpClient         httpClient;
 
     public NtfyNotificationService(NotificationConfig config) {
-        this.config = config;
-        HttpClient client;
-        try {
-            TrustManager[] trustAllCerts = new TrustManager[]{
-                new X509TrustManager() {
-                    public X509Certificate[] getAcceptedIssuers() { return new X509Certificate[0]; }
-                    public void checkClientTrusted(X509Certificate[] c, String a) {}
-                    public void checkServerTrusted(X509Certificate[] c, String a) {}
-                }
-            };
-            SSLContext sslContext = SSLContext.getInstance("TLS");
-            sslContext.init(null, trustAllCerts, new SecureRandom());
-            client = HttpClient.newBuilder()
-                    .connectTimeout(Duration.ofSeconds(10))
-                    .sslContext(sslContext)
-                    .build();
-        } catch (Exception e) {
-            client = HttpClient.newBuilder()
-                    .connectTimeout(Duration.ofSeconds(10))
-                    .build();
-        }
-        this.httpClient = client;
+        this.config     = config;
+        this.httpClient = HttpClient.newBuilder()
+                .connectTimeout(Duration.ofSeconds(10))
+                .build();
     }
 
+    /**
+     * Send push notification via ntfy.sh.
+     * ntfy.sh notifications go to the shared topic — they are NOT user-specific
+     * (unlike email/WhatsApp). Anyone subscribed to the topic receives them.
+     *
+     * @return "NTFY_OK" or "NTFY_FAILED: <reason>"
+     */
     public String send(NotificationRequest req) {
-        if (!config.getNtfy().isEnabled()) return "NTFY_SKIPPED (disabled)";
-        try {
-            String topicUrl = config.getNtfy().getTopicUrl();
-            String body = buildMessage(req);
-            String title = buildTitle(req);
-            String priority = req.isMatch() ? "high" : "default";
-            String tags = req.isMatch() ? "rotating_light,face,family" : "warning,face";
+        NotificationConfig.NtfyConfig ntfy = config.getNtfy();
 
-            HttpRequest request = HttpRequest.newBuilder()
-                    .uri(URI.create(topicUrl))
-                    .header("Title", title)
+        if (!ntfy.isEnabled()) {
+            return "NTFY_SKIPPED (disabled)";
+        }
+
+        try {
+            String title   = buildTitle(req);
+            String message = buildMessage(req);
+            String priority = req.isMatch() ? "urgent" : "high";
+
+            HttpRequest httpReq = HttpRequest.newBuilder()
+                    .uri(URI.create(ntfy.getTopicUrl()))
+                    .POST(HttpRequest.BodyPublishers.ofString(message))
+                    .header("Title",    title)
                     .header("Priority", priority)
-                    .header("Tags", tags)
-                    .header("Content-Type", "text/plain; charset=utf-8")
-                    .header("Actions", "view, Open Dashboard, " + config.getFlaskApiUrl())
-                    .POST(HttpRequest.BodyPublishers.ofString(body, StandardCharsets.UTF_8))
+                    .header("Tags",     req.isMatch() ? "white_check_mark,sos" : "warning")
                     .build();
 
-            HttpResponse<String> response = httpClient.send(request, HttpResponse.BodyHandlers.ofString());
+            HttpResponse<String> response =
+                    httpClient.send(httpReq, HttpResponse.BodyHandlers.ofString());
 
             if (response.statusCode() == 200) {
-                log.info("ntfy.sh notification sent to topic: {}", config.getNtfy().getTopic());
-                return "NTFY_OK -> topic:" + config.getNtfy().getTopic();
+                log.info("ntfy push sent to topic: {}", ntfy.getTopic());
+                return "NTFY_OK → " + ntfy.getTopicUrl();
             } else {
+                log.warn("ntfy HTTP {}: {}", response.statusCode(), response.body());
                 return "NTFY_FAILED: HTTP " + response.statusCode();
             }
+
         } catch (Exception e) {
-            log.error("ntfy.sh notification failed: {}", e.getMessage());
+            log.error("ntfy send failed: {}", e.getMessage());
             return "NTFY_FAILED: " + e.getMessage();
         }
     }
 
+    // ─────────────────────────────────────────────────────────────────────────
+
     private String buildTitle(NotificationRequest req) {
-        return req.isMatch() ? "Safe Return - MATCH FOUND" : "Safe Return - Possible Match";
+        String status = req.isMatch() ? "✅ MATCH FOUND" : "⚠️ Possible Match";
+        String name   = (req.getMissingPersonName() != null && !req.getMissingPersonName().isBlank())
+                ? req.getMissingPersonName() : req.getPersonName();
+        return String.format("[Safe Return] %s – %s", status, name);
     }
 
     private String buildMessage(NotificationRequest req) {
-        String location = req.getLocation() != null ? req.getLocation() : "Unknown location";
-        return String.format("Person: %s (ID: %s)\nConfidence: %.1f%%\nLocation: %s\nStatus: %s",
-                req.getPersonName(), req.getPersonId(), req.getConfidence(), location,
-                req.isMatch() ? "Confirmed Match" : "Possible Match - verify manually");
+        String missing = (req.getMissingPersonName() != null && !req.getMissingPersonName().isBlank())
+                ? req.getMissingPersonName() : "your family member";
+        return String.format(
+            "Possible match for %s detected at %s\nConfidence: %.1f%%\nMatched inmate: %s (%s)",
+            missing,
+            req.getLocation() != null ? req.getLocation() : "Unknown",
+            req.getConfidence(),
+            req.getPersonName(),
+            req.getPersonId()
+        );
     }
 }

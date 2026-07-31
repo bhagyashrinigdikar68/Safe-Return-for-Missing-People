@@ -25,16 +25,19 @@ public class NotificationOrchestrator {
     private final EmailNotificationService    emailService;
     private final NtfyNotificationService     ntfyService;
     private final WhatsAppNotificationService whatsAppService;
+    private final SmsNotificationService      smsService;
 
     public NotificationOrchestrator(
             NotificationConfig          config,
             EmailNotificationService    emailService,
             NtfyNotificationService     ntfyService,
-            WhatsAppNotificationService whatsAppService) {
+            WhatsAppNotificationService whatsAppService,
+            SmsNotificationService      smsService) {
         this.config          = config;
         this.emailService    = emailService;
         this.ntfyService     = ntfyService;
         this.whatsAppService = whatsAppService;
+        this.smsService      = smsService;
     }
 
     /**
@@ -99,6 +102,18 @@ public class NotificationOrchestrator {
                     : config.getWhatsapp().getPhone());
         }
         log.info("WhatsApp channel: {}", waResult);
+
+        // ── SMS channel (Twilio) ──────────────────────────────────────────────
+        String smsResult = smsService.send(req);
+        result.addChannelResult(smsResult);
+        if (smsResult.startsWith("SMS_OK") && result.getNotifiedPhone() == null) {
+            // Only overwrite notifiedPhone if WhatsApp didn't already set it
+            result.setNotifiedPhone(
+                req.hasSpecificPhone()
+                    ? req.getFamilyPhone()
+                    : config.getSms().getToPhone());
+        }
+        log.info("SMS channel: {}", smsResult);
 
         return result;
     }
