@@ -123,18 +123,12 @@ Notification Service
 - ArcFace
 - RetinaFace
 - NumPy
-- Pickle
 
 ## Notification Service
 
 - Java
 - Spring Boot
 - Maven
-
-## DevOps
-
-- Docker
-- Docker Compose
 
 ---
 
