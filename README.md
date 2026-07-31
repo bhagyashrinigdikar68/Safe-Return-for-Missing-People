@@ -186,6 +186,12 @@ pip install -r requirements.txt
 ```bash
 python app.py
 ```
+```bash
+python app1.py
+```
+```bash
+python app3.py
+```
 
 ---
 
