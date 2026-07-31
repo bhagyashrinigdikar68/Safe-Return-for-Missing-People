@@ -184,6 +184,9 @@ pip install -r requirements.txt
 ## Run Application
 
 ```bash
+python app_login.py
+```
+```bash
 python app.py
 ```
 ```bash
