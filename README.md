@@ -80,18 +80,6 @@ Simple and user-friendly interface built using:
 
 ---
 
-### 🐳 Docker Support
-
-Includes Docker configuration for:
-
-- Application
-- API
-- Notification Service
-
-allowing easy deployment.
-
----
-
 # 🏗️ System Architecture
 
 ```
