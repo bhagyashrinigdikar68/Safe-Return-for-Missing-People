@@ -116,11 +116,10 @@ Notification Service
 
 ## AI / Machine Learning
 
-- OpenCV
-- Face Recognition
-- ArcFace
-- RetinaFace
-- NumPy
+- Face Recognition using RetinaFace
+- Facial Embeddings generation using ArcFace
+- PSO + FGA Optimization for Dynamic Threshold.
+- Cosine Similarity Matching
 
 ## Notification Service
 
